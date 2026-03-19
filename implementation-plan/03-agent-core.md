@@ -40,8 +40,8 @@ The platform's core workflow is **Plan → Revise → Build**. This work stream 
 **User action:** Prompts the system (e.g., "Analyze sales performance", "Build a monthly operations report", "Create a market analysis presentation").
 
 **System behavior:**
-- Retrieves relevant Books (Knowledge + SOPs) via `get_books_for_task`
-- Calls LLM with user task + Books as context
+- Retrieves relevant rules via MCP `search_rules` (hybrid search: vector + keyword)
+- Calls LLM with user task + rules as context
 - Proposes structured plan: steps, required data sources, analysis methods, expected outputs
 
 **Output:** Proposed plan (JSON or UI representation) for user review.
@@ -82,7 +82,7 @@ The platform's core workflow is **Plan → Revise → Build**. This work stream 
 | Precondition | Description | Verification |
 |--------------|-------------|--------------|
 | 01-data-connectivity | MCP servers and tools available | Tools callable from agent |
-| 02-knowledge-base | Books available for retrieval | Agent can fetch Books via API |
+| 02-knowledge-base | Rules available via PocketBase; MCP search_rules | Agent can call search_rules |
 | LLM API access | Production LLM endpoint configured | Successful completion test |
 
 ---
@@ -159,7 +159,7 @@ The platform's core workflow is **Plan → Revise → Build**. This work stream 
 1. Implement prompt template for plan generation (user task + retrieved Books).
 2. Define structured output schema: steps, data_sources, methods, expected_outputs.
 3. Build plan generator that calls LLM and parses response (JSON mode or structured output).
-4. Add Book retrieval: fetch relevant Knowledge and SOP Books for task.
+4. Add rule retrieval: call MCP `search_rules` with user task; fetch relevant rules for context.
 5. Return proposed plan to user (JSON or UI representation via 04-table-interface).
 
 ### Phase 2: Revise Stage
@@ -172,7 +172,7 @@ The platform's core workflow is **Plan → Revise → Build**. This work stream 
 ### Phase 3: Build Stage
 
 10. Implement execution orchestrator: iterate over approved plan steps.
-11. For each step: call MCP tools (query, execute_python), pass Books as context.
+11. For each step: call MCP tools (query, execute_python), pass rules as context.
 12. Enforce Build mode: no row limits, full dataset (coordinate with 05-query-execution).
 13. Collect outputs: tables, intermediate results, final artifacts.
 14. Handle errors: retry, partial results, user notification.
@@ -191,7 +191,7 @@ The platform's core workflow is **Plan → Revise → Build**. This work stream 
 | Work Stream | Integration |
 |-------------|-------------|
 | **01-data-connectivity** | Agent invokes MCP tools during Build |
-| **02-knowledge-base** | Agent retrieves Books at Plan; uses as context during Build |
+| **02-knowledge-base** | Agent calls search_rules at Plan; uses rules as context during Build |
 | **04-table-interface** | Displays plan, approval/revise controls, execution status, results |
 | **05-query-execution** | Pass stage (Plan/Revise vs Build) to query layer for mode routing |
 | **06-slide-generation** | Trigger slide build from plan outputs |

@@ -29,7 +29,7 @@ implementation-plan/
 | Work Stream | Deliverable | Dependencies |
 |-------------|-------------|--------------|
 | [01-data-connectivity](./01-data-connectivity.md) | MCP server framework, data connectors | 00-preconditions |
-| [02-knowledge-base](./02-knowledge-base.md) | Book system, SOP repository | 01-data-connectivity |
+| [02-knowledge-base](./02-knowledge-base.md) | PocketBase rules, embedding, hybrid search, MCP search_rules | 01-data-connectivity |
 | [03-agent-core](./03-agent-core.md) | Agent orchestration engine | 01, 02 |
 | [04-table-interface](./04-table-interface.md) | Interactive table UI | 03-agent-core |
 | [05-query-execution](./05-query-execution.md) | Preview/Build query engine | 01, 07 |

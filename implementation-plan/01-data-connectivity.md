@@ -57,9 +57,11 @@ Data connectivity is the bridge between the agentic workforce and the organizati
 
 MCP standardizes how agents interact with external tools. The platform implements or integrates an MCP server that:
 
-1. **Exposes tools** — `query_database`, `call_api`, `execute_python`, `get_schema`
+1. **Exposes tools** — `query_database`, `call_api`, `execute_python`, `get_schema`, `search_rules`
 2. **Handles requests** — Receives tool calls from the agent runtime, executes, returns results
 3. **Manages auth** — Passes credentials securely to connectors (no credential leakage to LLM)
+
+**Rule retrieval:** The `search_rules` tool is provided by the rule retrieval system (02-knowledge-base). It queries PocketBase via hybrid search (vector + FTS) and returns the best-matching rules for agent context. May be implemented as part of the data connectivity MCP server or as a separate MCP server that the agent runtime connects to.
 
 ### Connector Types
 
@@ -115,6 +117,12 @@ The sandbox must:
 14. Populate with table/column metadata for primary sources. Keep in sync with actual schema.
 15. Expose schema via MCP tool `get_schema` for agent discovery during Plan stage.
 
+### Phase 5: Rule Retrieval (MCP)
+
+16. Implement or integrate `search_rules` MCP tool. Connects to PocketBase hybrid search API (see 02-knowledge-base).
+17. Tool signature: `search_rules(query: string, limit?: number, type?: string)`. Returns rules with content for agent context.
+18. Register tool with agent runtime. Agent calls during Plan stage to retrieve relevant rules.
+
 ---
 
 ## Example Tool Invocations
@@ -141,6 +149,18 @@ The sandbox must:
 }
 ```
 
+**Search rules (hybrid search via PocketBase):**
+```json
+{
+  "tool": "search_rules",
+  "params": {
+    "query": "analyze sales performance by region",
+    "limit": 5,
+    "type": "sop"
+  }
+}
+```
+
 ---
 
 ## Integration Points
@@ -149,7 +169,7 @@ The sandbox must:
 |-------------|-------------|
 | **03-agent-core** | Agent invokes MCP tools during Build stage |
 | **05-query-execution** | Connectors receive `row_limit` in Preview, omit in Build |
-| **02-knowledge-base** | SOPs reference data sources by name (from schema registry) |
+| **02-knowledge-base** | `search_rules` MCP tool queries PocketBase hybrid search; rules reference data sources |
 | **07-database-backend** | DataSource config stored in DB; schema registry may use same storage |
 
 ---
@@ -170,6 +190,7 @@ The sandbox must:
 ## Deliverables
 
 - [ ] MCP server with registered data tools
+- [ ] `search_rules` MCP tool (PocketBase hybrid search)
 - [ ] At least 2 working connectors (DB + API)
 - [ ] Python sandbox with execute_python tool
 - [ ] Schema registry with 3+ datasets
