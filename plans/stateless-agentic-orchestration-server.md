@@ -40,6 +40,16 @@ Add a Python orchestration server that lets Analysts and Agents start a task, ex
 - `ruff` for linting and import hygiene.
 - `mypy` for type-checking core orchestration and state models.
 
+## Testing Framework
+
+- Standardize on `pytest` as the server's primary testing framework.
+- Organize tests into:
+  - unit tests for pure state, storage, and orchestration functions
+  - integration tests for API routes and request-to-persistence behavior
+- Use FastAPI `TestClient` or `httpx` test clients for endpoint coverage.
+- Prefer fixtures for temporary session directories, seeded task states, and executor doubles.
+- Keep unit tests fast and deterministic by mocking external LLM or tool integrations.
+
 ## Steps
 
 1. Define the domain model in `server/domain/state.py` and `server/domain/events.py`.
@@ -122,7 +132,10 @@ Add a Python orchestration server that lets Analysts and Agents start a task, ex
    - **Won't do:** rely on logs alone as the system of record for task progress.
 
 8. Add tests in `tests/test_session_store.py`, `tests/test_step_runner.py`, and `tests/test_tasks_api.py`.
+   - Use `pytest` as the test runner and assertion framework for all server tests.
    - Cover:
+     - unit tests for state transitions, task selection, and executor routing
+     - unit tests for session store load/save semantics and atomic write behavior
      - task creation and file persistence
      - atomic save behavior
      - `run-step` updates only the targeted step
@@ -156,6 +169,7 @@ Add a Python orchestration server that lets Analysts and Agents start a task, ex
   - `pending -> running -> completed`
   - `pending -> running -> failed`
   - `failed -> running -> completed` for retries
+- Require unit tests for the state model, session store, and step runner before implementation is considered complete.
 - Run `ruff check`, `mypy`, and `pytest` before implementation is considered complete.
 - Confirm alignment with current repository pillars. At present, the repository contains pillar instructions but no concrete pillar files beyond `pillars/README.md`; if new pillars are added later, re-check this plan before implementation.
 
