@@ -29,30 +29,22 @@ Books replace the traditional idea of isolated prompts or tools with **composabl
 
 ---
 
-## Book Types
+## Book Types (Extensible)
 
-### Knowledge Books
+All Books share the same schema. The `type` property is **extensible**—new types can be added without schema changes. Agents and retrieval logic can use type for filtering and prioritization.
 
-Domain knowledge used by agents to reason about problems.
+### Built-in Types
 
-| Content Type | Examples |
-|--------------|----------|
-| Metric definitions | Revenue, ARR, churn rate, CAC |
-| Industry benchmarks | Typical conversion rates, retention by segment |
-| Business concepts | What constitutes a qualified lead, SLA definitions |
-| Data dictionaries | Column meanings, valid values, relationships |
+| Type | Purpose | Examples |
+|------|---------|----------|
+| **knowledge** | Domain knowledge for reasoning | Metric definitions, benchmarks, data dictionaries |
+| **sop** | Step-by-step procedures | Report generation, analysis workflows, review processes |
 
-### SOP (Standard Operating Procedure) Books
+### Extending Types
 
-Step-by-step instructions for executing common business processes.
+Organizations may define custom types (e.g., `playbook`, `template`, `checklist`). The schema does not restrict type values. Retrieval and agent behavior for custom types should be documented per deployment.
 
-| Content Type | Examples |
-|--------------|----------|
-| Report generation | How to generate a monthly sales report |
-| Analysis workflows | How to analyze customer churn |
-| Review processes | How to prepare a quarterly financial review |
-
-Agents can combine multiple Books to perform complex workflows (e.g., Sales Report SOP + Metric Definitions Knowledge + Data Dictionary).
+Agents can combine multiple Books of any type to perform complex workflows (e.g., Sales Report SOP + Metric Definitions + Data Dictionary).
 
 ---
 
@@ -78,60 +70,61 @@ Agents can combine multiple Books to perform complex workflows (e.g., Sales Repo
 
 ---
 
-## Detailed Book Schema
+## Unified Book Schema
 
-### Knowledge Book Structure
-
-```yaml
-id: string
-name: string
-type: knowledge
-version: number
-content:
-  sections:
-    - name: "Metric Definitions"
-      items:
-        - term: "ARR"
-          definition: "Annual Recurring Revenue. Sum of..."
-        - term: "Churn Rate"
-          definition: "Percentage of customers lost..."
-    - name: "Data Dictionary"
-      items:
-        - table: "sales"
-          column: "revenue"
-          description: "Total deal value in USD"
-metadata:
-  tags: [sales, finance, metrics]
-  data_sources: [sales_warehouse]
-```
-
-### SOP Book Structure
+All Books use the same schema. Content is always **markdown**. The `type` property is a string and is **extensible**.
 
 ```yaml
 id: string
 name: string
-type: sop
+type: string          # Extensible: "knowledge", "sop", or custom (e.g., "playbook", "template")
 version: number
-content:
-  steps:
-    - index: 1
-      action: "Retrieve sales data by region"
-      data_source: sales_warehouse
-      inputs: []
-      outputs: [sales_by_region]
-    - index: 2
-      action: "Calculate YoY growth"
-      data_source: null
-      inputs: [sales_by_region]
-      outputs: [growth_analysis]
-    - index: 3
-      action: "Generate summary table"
-      inputs: [growth_analysis]
-      outputs: [final_table]
-  required_books: [metric_definitions, data_dictionary]
+content: string       # Markdown. Structure and conventions are type-specific but format is always markdown.
 metadata:
-  tags: [sales, reporting]
+  tags: string[]      # For retrieval and filtering
+  data_sources: string[]  # Optional. Referenced data sources (e.g., sales_warehouse)
+  # Additional metadata keys may be added per type or deployment
+created_at: timestamp
+updated_at: timestamp
 ```
+
+### Example: Knowledge Book (type: knowledge)
+
+```markdown
+# Metric Definitions
+
+## ARR
+Annual Recurring Revenue. Sum of subscription revenue normalized to a yearly run rate.
+
+## Churn Rate
+Percentage of customers lost in a given period. Formula: (lost customers / start customers) × 100.
+
+# Data Dictionary
+
+## sales.revenue
+Total deal value in USD. Excludes taxes and discounts.
+```
+
+### Example: SOP Book (type: sop)
+
+```markdown
+# Monthly Sales Report
+
+## Step 1: Retrieve sales data by region
+- **Data source:** sales_warehouse
+- **Output:** sales_by_region
+
+## Step 2: Calculate YoY growth
+- **Input:** sales_by_region
+- **Output:** growth_analysis
+
+## Step 3: Generate summary table
+- **Input:** growth_analysis
+- **Output:** final_table
+- **Required books:** metric_definitions, data_dictionary
+```
+
+Markdown allows rich formatting (headers, lists, tables, code blocks) while keeping a single, simple content format across all book types.
 
 ---
 
@@ -139,31 +132,31 @@ metadata:
 
 ### Phase 1: Book Model
 
-1. Define Book schema: id, name, type (knowledge | sop), content (JSON), metadata, version.
+1. Define unified Book schema: id, name, type (string, extensible), content (markdown string), metadata, version.
 2. Implement storage (DB or file-based) for Books. Integrate with 07-database-backend.
 3. Create CRUD API for Book management. Knowledge Admin UI will consume this.
-4. Add type-specific validation: SOP must have ordered steps; Knowledge must have structured sections.
+4. Add validation: content must be valid markdown; type must be non-empty; metadata.tags optional.
 
-### Phase 2: Knowledge Books
+### Phase 2: Content & Retrieval
 
-5. Create template for Knowledge Books (sections: definitions, benchmarks, concepts, data dictionary).
-6. Implement ingestion from markdown or structured format (YAML/JSON).
+5. Create markdown templates or conventions for built-in types (knowledge, sop). Document structure expectations per type.
+6. Implement markdown ingestion and storage. Content stored as string; no parsing required for storage.
 7. Build search/retrieval for agents: embedding-based (semantic) or keyword. Agent calls `get_books_for_task(task_description)`.
-8. Populate 3+ initial Knowledge Books (e.g., metric definitions, data dictionary, industry benchmarks).
+8. Populate 3+ initial Knowledge Books and 2+ SOP Books in markdown format.
 
-### Phase 3: SOP Books
+### Phase 3: Type Extensibility
 
-9. Create template for SOP Books (steps, inputs, outputs, data sources, required_books).
-10. Implement step validation: each step has inputs, outputs, and data source (where applicable).
-11. Populate 2+ initial SOPs (e.g., monthly sales report, churn analysis).
-12. Link SOPs to required Books and data sources. Validate references exist.
+9. Document how to add custom book types. Type is a string; no enum restriction.
+10. Implement type-aware retrieval (optional): filter or rank by type when relevant.
+11. For SOP-type Books: document markdown conventions (e.g., "Step N:", "Data source:", "Required books:") for agent parsing.
+12. Validate metadata.data_sources and required_books references when present in content (optional, via convention).
 
 ### Phase 4: Composition & Governance
 
-13. Implement agent API: `get_books_for_task(task_description)`. Return relevant Knowledge + SOP Books.
+13. Implement agent API: `get_books_for_task(task_description)`. Return relevant Books of any type.
 14. Add versioning: immutable versions on edit. Past versions cannot be modified.
 15. Define approval workflow for new/updated Books (optional): draft → review → published.
-16. Create Knowledge Admin UI for creating and editing Books. Basic CRUD + preview.
+16. Create Knowledge Admin UI for creating and editing Books. Markdown editor with preview.
 
 ---
 
@@ -196,7 +189,8 @@ metadata:
 | Check | Criterion | Failure Action |
 |-------|-----------|----------------|
 | **Book uniqueness** | No duplicate Book names within type | Reject or merge |
-| **SOP completeness** | Each step has inputs, outputs, and data source (where applicable) | Block publish until complete |
+| **Content format** | Content is valid markdown | Reject or sanitize |
+| **Type extensibility** | Type accepts any non-empty string; built-in types documented | Do not restrict to enum |
 | **Agent retrieval** | Agents receive relevant Books for test tasks (e.g., "sales report" → sales SOP) | Tune retrieval or add metadata/tags |
 | **Version immutability** | Past versions cannot be edited | Enforce in storage layer |
 | **Content quality** | SME review for initial Books | Do not auto-publish without review |

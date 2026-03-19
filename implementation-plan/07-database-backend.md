@@ -142,8 +142,9 @@ DataSource (org or project-level)
 |--------|------|-------------|
 | id | UUID | Primary key |
 | name | string | Book name |
-| type | enum | knowledge, sop |
-| content | JSONB | Book content |
+| type | string | Extensible (e.g., knowledge, sop, playbook). Not an enum. |
+| content | text | Markdown content. Same format for all types. |
+| metadata | JSONB | tags, data_sources, etc. |
 | version | int | Current version |
 | created_at | timestamp | Audit |
 | updated_at | timestamp | Audit |
