@@ -1,0 +1,17 @@
+---
+description: Pillars are checked when building a plan—ensure alignment with uncompromising truths
+globs: []
+alwaysApply: false
+---
+
+# Pillars Check
+
+When building a plan, **check alignment with pillars**.
+
+Pillars live in the `pillars/` directory and define the uncompromising truths the system must follow. Each pillar file contains a core principle; decisions and plans must be aligned with these principles.
+
+**Process:**
+1. Read all pillar files in `pillars/`
+2. Verify the plan does not violate any pillar
+3. Flag conflicts or gaps before finalizing
+4. Adjust the plan to align with pillars, or escalate if alignment is impossible
