@@ -37,6 +37,20 @@ implementation-plan/
 | [07-database-backend](./07-database-backend.md) | Persistence layer | 00-preconditions |
 | [08-go-to-market](./08-go-to-market.md) | GTM strategy, launch plan | 03, 04, 06 |
 
+## Document Structure
+
+Each work stream file includes:
+
+- **Vision Context** — How the work stream aligns with the platform vision
+- **Persona Mapping** — Which personas (Analyst, Agent, Knowledge Admin) interact with this work stream
+- **Preconditions** — Must-have conditions before starting
+- **Sections** — What the work stream contains and why
+- **Detailed Architecture/Specs** — Technical details, schemas, examples
+- **Actions** — Phased tasks to perform
+- **Integration Points** — How this work stream connects to others
+- **Checks and Guardrails** — Validation criteria and safety limits
+- **Deliverables** — Checklist of outputs
+
 ## How to Use This Plan
 
 1. **Start with** [00-preconditions.md](./00-preconditions.md) — ensure all global preconditions are met.
