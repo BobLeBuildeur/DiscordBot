@@ -1,11 +1,11 @@
-# MVP Milestone
+# PoC Milestone
 
 ## Problem
 
 Analysts need a first end-to-end product that can generate actionable plans and iteratively improve outputs from human feedback.  
 The plan is expressed in markdown by the orchestration system and converted to HTML in the UI for review and commenting.
 
-This MVP also validates a market gap: business teams need agentic LLM workflows that are usable by average office workers who are not technical, are not interested in code as a deliverable, and do not use developer tools such as Cursor.  
+This PoC also validates a market gap: business teams need agentic LLM workflows that are usable by average office workers who are not technical, are not interested in code as a deliverable, and do not use developer tools such as Cursor.  
 The current gap is the lack of a business-native experience that preserves powerful LLM reasoning while presenting work in familiar document-review patterns (read, comment, revise) instead of coding workflows.
 
 ## Core Workflow Model (Plan -> Revise -> Build)
@@ -39,7 +39,7 @@ The system follows a Plan -> Revise -> Build workflow for back-office tasks.
      - The analytical direction is correct
      - Organizational standards are respected
 
-3. Build *(for context only, outside MVP scope)*
+3. Build *(for context only, outside PoC scope)*
    - Once approved, agents execute the full plan by:
      - Retrieving data
      - Running analysis
@@ -57,7 +57,7 @@ flowchart TD
     D[4. Analyst comments on plan and requests revisions]
     E[5. System addresses feedback and presents updated plan]
     F{6. Analyst approves the plan?}
-    G[7. Out of MVP scope: agent executes plan and saves deliverable]
+    G[7. Out of PoC scope: agent executes plan and saves deliverable]
 
     A --> B --> C --> D --> E --> F
     F -- No, needs more changes --> D
@@ -72,7 +72,7 @@ flowchart TD
 - Build a Python backend that receives comments plus document location metadata and feeds both back into the LLM workflow.
 - Use ChatGPT via API as the LLM provider for planning and feedback-driven updates.
 - Return updated outputs to the UI after comment ingestion and LLM processing.
-- Keep the Build stage explicitly out of MVP scope; include it only as future workflow context.
+- Keep the Build stage explicitly out of PoC scope; include it only as future workflow context.
 
 ## Work Breakdown Structure
 
@@ -90,5 +90,5 @@ flowchart TD
    2. Handle retries, response validation, and error states.
 5. End-to-end validation
    1. Verify Plan -> Revise cycle: plan generation -> UI rendering -> comment submission -> revised plan output.
-6. Future scope placeholder (non-MVP)
+6. Future scope placeholder (non-PoC)
    1. Document Build-stage execution requirements for a later milestone.
