@@ -25,8 +25,12 @@ The system follows a Plan -> Revise -> Build workflow for back-office tasks.
    - The user reviews and edits the proposed plan before execution.
    - Revision can happen through:
      - Natural language feedback
-     - Table manipulation
+     - Comments added directly on the HTML representation of the markdown plan (similar to coworker comments in a Word document)
      - Adding constraints or instructions
+   - Each comment is captured with:
+     - The comment text
+     - The location/anchor in the document where the comment was made
+   - The backend injects comment text plus document location back into the LLM prompt to refine the plan.
    - This stage ensures:
      - Business context is captured
      - The analytical direction is correct
@@ -44,8 +48,8 @@ The system follows a Plan -> Revise -> Build workflow for back-office tasks.
 
 - Build a reasoning orchestration workflow for the Plan stage that generates a plan in markdown from a chain-of-thought process.
 - Support the Revise stage by allowing users to review and edit the plan before execution.
-- Implement a Svelte UI that allows users to comment on HTML content.
-- Build a Python backend that receives HTML comments and feeds them back into the LLM workflow.
+- Implement a Svelte UI that renders the markdown plan as HTML and supports location-specific comments on that HTML.
+- Build a Python backend that receives comments plus document location metadata and feeds both back into the LLM workflow.
 - Use ChatGPT via API as the LLM provider for planning and feedback-driven updates.
 - Return updated outputs to the UI after comment ingestion and LLM processing.
 - Keep the Build stage explicitly out of MVP scope; include it only as future workflow context.
@@ -56,11 +60,11 @@ The system follows a Plan -> Revise -> Build workflow for back-office tasks.
    1. Define orchestration steps for prompt intake, reasoning execution, and markdown plan output.
    2. Implement markdown plan renderer/formatter in backend flow.
 2. Feedback UI
-   1. Build Svelte interface for rendering HTML and attaching comment threads/annotations.
-   2. Capture and submit comments to backend endpoints.
+   1. Build Svelte interface for rendering markdown-as-HTML and attaching comment threads/annotations at specific locations.
+   2. Capture and submit comment text with location anchors to backend endpoints.
 3. Backend feedback loop
-   1. Implement Python API endpoints for comment intake and context persistence.
-   2. Rehydrate context and comments into LLM prompts.
+   1. Implement Python API endpoints for comment intake, location metadata, and context persistence.
+   2. Rehydrate the plan plus comments (with location context) into LLM refinement prompts.
 4. LLM integration
    1. Integrate ChatGPT API client and request pipeline.
    2. Handle retries, response validation, and error states.
