@@ -1,0 +1,39 @@
+---
+description: Defines the structure for milestones—major deliverables described in markdown files
+globs: ["**/*milestone*.md", "**/milestones/**/*.md"]
+alwaysApply: false
+---
+
+# Milestones
+
+A **milestone** is a major deliverable described in a markdown file.
+
+## Required Structure
+
+Each milestone must contain:
+
+### 1. Problem
+
+A clear statement of the problem the milestone addresses.
+
+### 2. Requirements
+
+Requirements written as **User Stories** in the format:
+- **ARO** (As a [persona], I want [goal], so that [benefit])
+- **I** (I want [goal], so that [benefit])
+
+User stories **must reference existing personas** (Analysts, Agents, Knowledge Admins) where applicable.
+
+### 3. Work Breakdown Structure (optional)
+
+An optional hierarchical breakdown of work items, tasks, or deliverables.
+
+---
+
+## Quality Guidance
+
+When writing a milestone, **query the user to fill in gaps** to ensure high quality. Ask clarifying questions about:
+- Ambiguous problem statements
+- Missing or underspecified requirements
+- Persona attribution for user stories
+- Scope boundaries and acceptance criteria
