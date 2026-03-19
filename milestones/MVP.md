@@ -47,6 +47,23 @@ The system follows a Plan -> Revise -> Build workflow for back-office tasks.
      - Creating final artifacts (tables, charts, slides)
    - Execution occurs using complete datasets.
 
+## User Journey (Mermaid)
+
+```mermaid
+flowchart TD
+    A[1. Analyst starts a new project]
+    B[2. Analyst explains the problem in chat-like input]
+    C[3. System reviews understanding and presents plan]
+    D[4. Analyst comments on plan and requests revisions]
+    E[5. System addresses feedback and presents updated plan]
+    F{6. Analyst approves the plan?}
+    G[7. Out of MVP scope: agent executes plan and saves deliverable]
+
+    A --> B --> C --> D --> E --> F
+    F -- No, needs more changes --> D
+    F -- Yes --> G
+```
+
 ## Requirements
 
 - Build a reasoning orchestration workflow for the Plan stage that generates a plan in markdown from a chain-of-thought process.
