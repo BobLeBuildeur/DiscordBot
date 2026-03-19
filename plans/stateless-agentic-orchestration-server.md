@@ -1,259 +1,116 @@
-# Stateless Agentic Orchestration Server
-
-## Context
-
-This feature extends the PoC's `Plan -> Revise -> Build` concept by defining the execution substrate for the future Build stage without turning the backend into a long-lived stateful process. The design follows Void-like paradigms: state is an explicit artifact, each request advances work by one observable step, execution is resumable from disk, and the server remains a thin coordinator rather than a hidden autonomous runtime.
+# Agentic Orchestrator PoC
 
 ## Goal
 
-Add a Python orchestration server that lets Analysts and Agents start a task, execute exactly one step per API call, and resume work from a local session file instead of in-memory process state. Success means:
+Add a lightweight orchestration service for Analysts that turns a rough problem statement into a markdown plan through a conversational loop. Success means:
 
-- `POST /start-task` creates a task state file for a new session.
-- `POST /run-step?step_id=<id>` loads the session file, executes one step, records iterations, memory updates, metrics, and final output for that step, then saves the state back to disk.
-- `POST /continue` loads the same state file, selects the next runnable step, advances exactly one step, and saves the result.
-- Restarting the server does not lose task progress because the JSON file is the source of truth.
-- Operators can inspect a task's current plan, step history, and memory directly from the saved state file.
+- `POST /orchestrator/sessions` creates a session from the initial problem statement and immediately runs a state check.
+- `POST /orchestrator/sessions/{session_id}/messages` accepts user answers or plan feedback and streams back either follow-up questions or a markdown plan.
+- After each turn, the orchestrator persists a structured `state_check` that says whether more information is required or whether the next action is `ask_follow_up`, `create_plan`, or `refine_plan`.
+- Once a plan exists, the latest markdown plan is always included in later prompt context.
+- Every step is saved to disk in an inspectable format so the team can replay real PoC sessions and learn from them.
 
 ## Preconditions
 
-- Python 3.11+ is available for typing, `pathlib`, `contextlib`, and modern async/server support.
-- The PoC's Plan and Revise stages are already capable of producing an approved ordered plan that can be handed to Build-stage execution.
-- A writable local directory such as `./data/sessions/` is available to persist one JSON file per task.
-- A clear contract exists for how a planned step becomes an executable step definition:
-  - either direct execution from user-approved markdown plan content, or
-  - a normalization pass that converts the approved plan into structured steps.
-- The implementation chooses one Python API framework before coding begins; FastAPI is the recommended default for typed request/response models.
-- The team accepts the single-node persistence model for this feature phase; this plan does not introduce shared databases, queues, or distributed locks.
+- Python 3.11+ is available.
+- `OPENAI_API_KEY` is configured for the runtime environment.
+- A writable local directory such as `data/orchestrator/` is available for persisted sessions.
+- The team accepts a single-node, file-backed design for the PoC.
+- The generated markdown plan should follow the structure described in `.cursor/rules/feature-planning.mdc`.
+- The implementation can mock OpenAI responses in tests; multi-provider support is out of scope for this milestone.
 
 ## Used Tools
 
 - Python 3.11+ for the application runtime.
-- FastAPI for HTTP endpoints and request/response validation.
-- Pydantic for state models, endpoint schemas, and JSON serialization contracts.
-- `uvicorn` for local server execution.
-- Standard library file primitives (`pathlib`, `json`, `tempfile`, `os.replace`) for atomic state persistence.
-- A lightweight file-locking mechanism for same-task concurrency protection:
-  - preferred: `filelock` Python package, or
-  - fallback: POSIX locking if the deployment target stays Linux-only.
+- FastAPI, or the existing Python HTTP layer, for endpoints and streamed responses.
+- Pydantic for request, response, and saved-state models.
+- OpenAI API for state checks, follow-up questions, plan generation, and plan refinement.
+- Standard library file primitives (`pathlib`, `json`, `tempfile`, `os.replace`) for persisted snapshots and step artifacts.
+- Server-Sent Events or chunked HTTP streaming for low-latency responses.
 - `pytest` for unit and integration tests.
-- `httpx` or FastAPI `TestClient` for endpoint tests.
-- `ruff` for linting and import hygiene.
-- `mypy` for type-checking core orchestration and state models.
-
-## Testing Framework
-
-- Standardize on `pytest` as the server's primary testing framework.
-- Organize tests into:
-  - unit tests for pure state, storage, and orchestration functions
-  - integration tests for API routes and request-to-persistence behavior
-- Use FastAPI `TestClient` or `httpx` test clients for endpoint coverage.
-- Prefer fixtures for temporary session directories, seeded task states, and executor doubles.
-- Keep unit tests fast and deterministic by mocking external LLM or tool integrations.
-
-## Core Models and Types
-
-- `TaskState`: the top-level persisted object for one session. It is the canonical snapshot loaded from disk at the start of a request and written back at the end.
-- `PlanStep`: the structured representation of one executable step from the approved plan. It defines what work should happen, which executor handles it, and what status it is currently in.
-- `StepIteration`: one attempt to run a step. It captures the per-attempt timeline, summary, and retry history so the system can show what happened across multiple runs.
-- `TaskMetrics`: aggregate counters and measurements for the whole task, such as request count, completed-step count, durations, and last error metadata.
-- `MemoryEntry` or `memory: dict[str, str]`: the compact cross-step memory layer. It stores reusable summaries or artifacts from earlier steps so later steps can resume without hidden server memory.
-- `StepResult`: the normalized return type from an executor. It carries the outcome of one step run back into orchestration so the task state can be updated consistently.
-- status enum values such as `pending`, `running`, `completed`, `failed`, and `blocked`: the allowed lifecycle states for each step, used to validate legal transitions and next-step selection.
+- `ruff` for linting.
 
 ## Steps
 
-1. Define the domain model in `server/domain/state.py` and `server/domain/events.py`.
-   - Create typed models for:
-     - `TaskState` - the persisted session snapshot for one task
-     - `PlanStep` - one executable unit of work within the plan
-     - `StepIteration` - one recorded attempt to execute a step
-     - `MemoryEntry` or `memory: dict[str, str]` - reusable summaries carried across steps
-     - `TaskMetrics` - task-level counters and measurements
-   - Extend the approximate state shape into a stricter schema with:
-     - `status` enums such as `pending`, `running`, `completed`, `failed`, `blocked`
-     - `current_step_id`
-     - `error` fields for failed steps
-     - iteration timestamps and attempt numbers
-   - **Won't do:** keep the state as an untyped free-form dictionary; mix API payloads and persistence models in route handlers.
+1. Define the orchestrator state in `backend/orchestrator/models.py`.
+   - Add models for `SessionState`, `TurnRecord`, `PlanVersion`, and `StateCheck`.
+   - `StateCheck` should capture the post-step decision explicitly, for example:
+     - `needs_more_information: bool`
+     - `next_action: ask_follow_up | create_plan | refine_plan | wait_for_user`
+     - `reason`
+     - `missing_information`
+   - `SessionState` should keep `problem_statement`, `conversation_history`, `current_plan_markdown`, `plan_versions`, and the latest `state_check`.
+   - **Won't do:** infer workflow state only from loose chat history; keep the current plan only in transient process memory.
 
-2. Implement file-backed state persistence in `server/storage/session_store.py`.
-   - Store each session at `data/sessions/{task_id}.json`.
-   - Implement:
-     - `create_task(state: TaskState) -> TaskState`
-     - `load_task(task_id: str) -> TaskState`
-     - `save_task(state: TaskState) -> TaskState`
-   - Use temp-file write plus atomic rename to prevent partial writes.
-   - Add per-task lock files so concurrent `run-step` or `continue` requests for the same task cannot corrupt state.
-   - **Won't do:** hold task state in module globals; rely on non-atomic direct overwrite writes; ignore concurrent request collisions.
+2. Implement file-backed session storage in `backend/orchestrator/store.py`.
+   - Save the latest snapshot at `data/orchestrator/{session_id}/session.json`.
+   - Save each step as a separate artifact such as `data/orchestrator/{session_id}/steps/{step_index}-{kind}.json`.
+   - Persist at least:
+     - session creation
+     - each user message
+     - each LLM state-check result
+     - each streamed assistant result
+     - each new or revised markdown plan
+   - Use temp-file plus rename for snapshot writes so saved sessions stay readable after interruptions.
+   - **Won't do:** introduce a database, queue, or metrics pipeline for the PoC; rely on logs alone for reconstruction.
 
-3. Add step execution primitives in `server/orchestrator/step_runner.py`.
-   - Create a pure orchestration boundary:
-     - input: loaded `TaskState`, target `step_id`, execution context
-     - output: updated `TaskState`
-   - Represent each run as one iteration appended to `steps[n].iterations`.
-   - Update `memory` with summarized outputs keyed by step name or canonical step ID.
-   - Write `final_output`, `confidence`, duration, token/tool metrics, and failure metadata back into the step record.
-   - Keep the runner stateless between requests; all continuity comes from loaded state.
-   - **Won't do:** spawn a background worker that keeps hidden session memory; mutate state outside the loaded-and-saved request cycle.
+3. Build the orchestration loop in `backend/orchestrator/engine.py`.
+   - `start_session(problem_statement)` should create the session, run the first state check, and decide whether to ask follow-up questions or draft a plan.
+   - `advance_session(session_id, user_message)` should load the snapshot, append the new user input, rerun the state check, and branch to:
+     - follow-up question generation
+     - first plan generation
+     - plan refinement
+   - Once `current_plan_markdown` exists, include it in every later state-check and refinement prompt.
+   - Keep the loop user-driven: one user turn in, one streamed assistant turn out, then persist the updated state.
+   - **Won't do:** execute the full plan automatically; create hidden background loops; add Build-stage task execution.
 
-4. Introduce an executor registry in `server/orchestrator/executors.py`.
-   - Define a small executor interface such as `execute(step: PlanStep, state: TaskState) -> StepResult`.
-   - Support initial executor types like:
-     - `llm_reasoning`
-     - `tool_call`
-     - `synthesis`
-     - `human_input_required`
-   - This keeps the server close to Void-style explicit work units: each step is inspectable, typed, and routed through a known executor.
-   - **Won't do:** encode step-specific branching logic directly in API endpoints; let arbitrary strings invoke arbitrary code paths without validation.
+4. Create focused prompt builders in `backend/orchestrator/prompts.py`.
+   - Add separate prompts for:
+     - state check
+     - follow-up question generation
+     - initial markdown plan generation
+     - markdown plan refinement from user comments
+   - The plan-generation prompt should require the markdown structure described in `.cursor/rules/feature-planning.mdc`.
+   - The refinement prompt should include both the latest plan markdown and the latest user feedback.
+   - **Won't do:** use one oversized prompt that mixes orchestration decisions and final user output without structured intermediate state.
 
-5. Build task lifecycle services in `server/orchestrator/task_service.py`.
-   - Implement:
-     - `start_task(task, plan) -> TaskState`
-     - `run_step(task_id, step_id) -> TaskState`
-     - `continue_task(task_id) -> TaskState`
-     - `get_next_runnable_step(state) -> PlanStep | None`
-   - `start_task` should normalize the approved plan into structured steps, set timestamps, initialize metrics, and persist the first state file.
-   - `continue_task` should select the next `pending` or retryable step and advance exactly one step.
-   - **Won't do:** let `/continue` silently execute the entire remaining plan; make next-step selection opaque or inconsistent.
+5. Expose a small streaming API in `backend/api/orchestrator.py` and `backend/app.py`.
+   - Add:
+     - `POST /orchestrator/sessions` for the initial problem statement
+     - `POST /orchestrator/sessions/{session_id}/messages` for answers and plan feedback
+     - `GET /orchestrator/sessions/{session_id}` for inspectability of the saved state
+   - Stream assistant output as it is generated, then emit a final event or response chunk containing the saved `state_check` and `session_id`.
+   - Keep the payloads simple so a thin PoC client can render chat text and markdown plans without a complex protocol.
+   - **Won't do:** defer all output until the model finishes; design a production-grade websocket layer before validating the user experience.
 
-6. Expose the HTTP API in `server/api/tasks.py` and `server/app.py`.
-   - Add endpoints:
-     - `POST /start-task`
-     - `POST /run-step`
-     - `POST /continue`
-     - `GET /tasks/{task_id}`
-   - Example request contracts:
-     - `POST /start-task` accepts task text plus either a structured plan array or a reference to the approved PoC plan artifact.
-     - `POST /run-step` accepts `task_id` and `step_id`.
-     - `POST /continue` accepts `task_id`.
-   - Return the updated task state or a summarized view that includes latest step status, outputs, and next-step hints.
-   - **Won't do:** hide task state behind non-deterministic side effects; make clients guess whether a step actually persisted.
+6. Add end-to-end tests in `tests/test_orchestrator_store.py`, `tests/test_orchestrator_engine.py`, and `tests/test_orchestrator_api.py`.
+   - Mock OpenAI responses to cover:
+     - more information needed
+     - enough information to create a plan
+     - plan refinement after user comments
+     - the plan being included in refinement context
+     - step artifacts being written to disk
+     - streamed responses finishing with a persisted final state
+   - **Won't do:** depend on live OpenAI calls in CI; test only the happy path.
 
-7. Add observability and audit fields in `server/orchestrator/metrics.py` or the state layer.
-   - Record:
-     - request count per task
-     - step duration
-     - executor type
-     - retry count
-     - token/tool usage where available
-     - last error
-   - Keep these metrics inside the task file for local inspectability during the single-node phase.
-   - If metrics become too noisy, split volatile metrics into a sibling file later; keep the primary state file readable.
-   - **Won't do:** rely on logs alone as the system of record for task progress.
-
-8. Add tests in `tests/test_session_store.py`, `tests/test_step_runner.py`, and `tests/test_tasks_api.py`.
-   - Use `pytest` as the test runner and assertion framework for all server tests.
-   - Cover:
-     - unit tests for state transitions, task selection, and executor routing
-     - unit tests for session store load/save semantics and atomic write behavior
-     - task creation and file persistence
-     - atomic save behavior
-     - `run-step` updates only the targeted step
-     - `continue` chooses the next runnable step and advances only one step
-     - recovery after process restart by reloading from saved JSON
-     - concurrent same-task requests are serialized or rejected safely
-     - failure paths preserve partial history without corrupting prior steps
-   - **Won't do:** test only happy paths; skip restart and concurrency coverage.
-
-9. Document the execution model in a separate document such as `docs/orchestration-server.md`.
-   - Explain the core loop explicitly:
-     - User -> API -> load state -> run one step -> save state
-   - Include a sample JSON session file and example request/response bodies.
-   - Document non-goals for this phase:
-     - no long-running daemon memory
-     - no multi-step automatic background loop
-     - no distributed persistence
-   - **Won't do:** put this design documentation in `README.md`; leave the statelessness model implicit; document behavior differently from the API contract.
+7. Update supporting docs in `milestones/PoC.md` and a short implementation note such as `docs/orchestrator-poc.md` if a new docs folder is added.
+   - Align the milestone with the smaller `problem -> clarify -> plan -> refine` loop.
+   - Document that observability for the PoC is disk inspectability rather than dashboards or production telemetry.
+   - **Won't do:** reintroduce Build-stage scope or expand the README into full system design docs.
 
 ## Guardrails
 
-- Preserve the PoC's scope boundary: this feature creates Build-stage execution infrastructure, but it must not force the Plan or Revise stages to become stateful server-side workflows.
-- Treat the saved task file as the source of truth. The server may cache nothing that is required for correctness across requests.
-- Advance exactly one step per mutating endpoint call. A request may retry a step, but it must not silently execute multiple pending steps.
-- Do not persist hidden chain-of-thought. Persist observable artifacts only: prompts, tool inputs/outputs where appropriate, summaries, status transitions, user-visible rationale, and metrics.
-- Use atomic file writes and per-task locking so a crash or duplicate request cannot leave invalid JSON behind.
-- Keep state schema versioned with a field such as `state_version` to make future migrations explicit.
-- Keep the session file small and inspectable; store bulky artifacts by reference if outputs grow too large.
-- Return deterministic error responses for missing task IDs, missing step IDs, locked tasks, and non-runnable steps.
-- Validate all state transitions:
-  - `pending -> running -> completed`
-  - `pending -> running -> failed`
-  - `failed -> running -> completed` for retries
-- Keep design and API documentation in dedicated docs files rather than expanding the repository `README.md`.
-- Require unit tests for the state model, session store, and step runner before implementation is considered complete.
-- Run `ruff check`, `mypy`, and `pytest` before implementation is considered complete.
-- Confirm alignment with current repository pillars. At present, the repository contains pillar instructions but no concrete pillar files beyond `pillars/README.md`; if new pillars are added later, re-check this plan before implementation.
-
-## Proposed State Shape
-
-```json
-{
-  "state_version": 1,
-  "task_id": "task_123",
-  "task": "Build a monthly operations report",
-  "plan": ["Collect source data", "Analyze trends", "Draft report"],
-  "current_step_id": 2,
-  "steps": [
-    {
-      "step_id": 1,
-      "name": "Collect source data",
-      "executor": "tool_call",
-      "status": "completed",
-      "iterations": [
-        {
-          "attempt": 1,
-          "started_at": "2026-03-19T12:00:00Z",
-          "finished_at": "2026-03-19T12:00:03Z",
-          "summary": "Fetched source files and normalized headers"
-        }
-      ],
-      "final_output": "Normalized dataset stored for downstream analysis",
-      "confidence": 0.93,
-      "error": null
-    }
-  ],
-  "memory": {
-    "step_1": "Normalized dataset is ready",
-    "step_2": "Trend analysis pending"
-  },
-  "metrics": {
-    "request_count": 3,
-    "step_count_completed": 1,
-    "last_executor": "tool_call"
-  },
-  "created_at": "2026-03-19T12:00:00Z",
-  "updated_at": "2026-03-19T12:00:03Z"
-}
-```
-
-## API Sketch
-
-```text
-POST /start-task
-  -> validate input
-  -> build TaskState
-  -> save data/sessions/{task_id}.json
-  -> return created state
-
-POST /run-step
-  -> load state
-  -> lock task file
-  -> run requested step
-  -> save state
-  -> return updated state
-
-POST /continue
-  -> load state
-  -> lock task file
-  -> select next runnable step
-  -> run exactly one step
-  -> save state
-  -> return updated state
-```
-
-## Open Questions
-
-- Should `POST /start-task` accept only a structured plan, or should it also parse approved markdown plans produced by the PoC Plan stage?
-- Should `memory` remain a simple dictionary in v1, or should it become a typed list of memory entries with scopes such as `task`, `step`, and `artifact`?
-- Do we want `GET /tasks/{task_id}` in v1 for inspectability, even though it was not in the original pseudo-code?
-- What is the maximum expected size of a local task file before large artifacts should be written out-of-band and referenced from state?
+- Optimize for learning and user validation, not production hardening.
+- Keep the first implementation single-process and file-backed.
+- After every orchestrator step, persist an explicit `state_check` before the request is considered complete.
+- Treat the latest markdown plan as a first-class artifact and include it in later prompt context whenever it exists.
+- Save each step in a human-inspectable format on disk so a reviewer can reconstruct what happened from the saved artifacts.
+- Stream responses to the client to reduce perceived latency.
+- Keep Build-stage execution out of scope for this milestone.
+- Keep observability intentionally light: basic logs plus saved artifacts are enough for the PoC.
+- Do not persist hidden chain-of-thought; persist user-visible questions, plans, decisions, and structured state instead.
+- Before implementation is considered complete, run `ruff check` and `pytest`.
+- Re-check against repository pillars:
+  - `pillars/opinionated-simplicity-underrated.md`
+  - `pillars/small-steps-toward-user-value.md`
+  - `pillars/state-is-explicit-not-implicit.md`

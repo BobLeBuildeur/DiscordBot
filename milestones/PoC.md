@@ -2,93 +2,96 @@
 
 ## Problem
 
-Analysts need a first end-to-end product that can generate actionable plans and iteratively improve outputs from human feedback.  
-The plan is expressed in markdown by the orchestration system and converted to HTML in the UI for review and commenting.
+Analysts need a first end-to-end product that can turn a rough business problem into a usable plan through a conversational loop.  
+The PoC should validate the user experience: can the system ask good follow-up questions, decide when it has enough information, generate a useful markdown plan, and refine that plan from user feedback?
 
 This PoC also validates a market gap: business teams need agentic LLM workflows that are usable by average office workers who are not technical, are not interested in code as a deliverable, and do not use developer tools such as Cursor.  
 The current gap is the lack of a business-native experience that preserves powerful LLM reasoning while presenting work in familiar document-review patterns (read, comment, revise) instead of coding workflows.
 
-## Core Workflow Model (Plan -> Revise -> Build)
+## Core Workflow Model (Problem -> Clarify -> Plan -> Refine)
 
-The system follows a Plan -> Revise -> Build workflow for back-office tasks.
+The system follows a small conversational loop for back-office planning tasks.
 
-1. Plan
-   - The user prompts the system to propose a structured plan for completing a task.
+1. Problem statement
+   - The customer starts the session by posting a problem statement.
    - Example prompts:
      - Analyze sales performance
      - Build a monthly operations report
      - Create a market analysis presentation
-   - The system proposes:
-     - Steps
-     - Required data sources
-     - Analysis methods
-     - Expected outputs
 
-2. Revise
-   - The user reviews and edits the proposed plan before execution.
-   - Revision can happen through:
-     - Natural language feedback
-     - Comments added directly on the HTML representation of the markdown plan (similar to coworker comments in a Word document)
-     - Adding constraints or instructions
-   - Each comment is captured with:
-     - The comment text
-     - The location/anchor in the document where the comment was made
-   - The backend injects comment text plus document location back into the LLM prompt to refine the plan.
-   - This stage ensures:
-     - Business context is captured
-     - The analytical direction is correct
-     - Organizational standards are respected
+2. Clarify
+   - The system calls OpenAI to perform a state check after each user input.
+   - That state check decides whether more information is required or whether the system should create or refine a plan.
+   - If more information is needed, the system asks follow-up questions and waits for the customer to reply.
 
-3. Build *(for context only, outside PoC scope)*
-   - Once approved, agents execute the full plan by:
-     - Retrieving data
-     - Running analysis
-     - Producing structured outputs
-     - Creating final artifacts (tables, charts, slides)
-   - Execution occurs using complete datasets.
+3. Plan
+   - Once the system has enough information, it generates a markdown plan.
+   - The plan should follow the structure described in `.cursor/rules/feature-planning.mdc`.
+   - The latest plan must remain part of the orchestration context for later turns.
+
+4. Refine
+   - The customer responds with comments or requested changes to the plan.
+   - The system runs the same state check again:
+     - ask more follow-up questions if context is still missing, or
+     - refine the markdown plan directly if enough context is available
+   - This loop repeats until the customer is satisfied with the plan.
+
+5. Build *(for context only, outside PoC scope)*
+   - Executing the approved plan remains out of scope for this milestone.
 
 ## User Journey (Mermaid)
 
 ```mermaid
 flowchart TD
     A[1. Analyst starts a new project]
-    B[2. Analyst explains the problem in chat-like input]
-    C[3. System reviews understanding and presents plan]
-    D[4. Analyst comments on plan and requests revisions]
-    E[5. System addresses feedback and presents updated plan]
-    F{6. Analyst approves the plan?}
-    G[7. Out of PoC scope: agent executes plan and saves deliverable]
+    B[2. Customer posts a problem statement]
+    C[3. OpenAI state check decides next action]
+    D{4. Is more information required?}
+    E[5. Stream follow-up questions to the customer]
+    F[6. Customer answers questions]
+    G[7. Stream markdown plan]
+    H[8. Customer comments on the plan]
+    I[9. OpenAI state check decides ask-more vs refine]
+    J[10. Plan approved; Build remains out of scope]
 
-    A --> B --> C --> D --> E --> F
-    F -- No, needs more changes --> D
-    F -- Yes --> G
+    A --> B --> C --> D
+    D -- Yes --> E --> F --> C
+    D -- No --> G --> H --> I
+    I -- Ask more questions --> E
+    I -- Refine plan --> G
+    I -- Stop here --> J
 ```
 
 ## Requirements
 
-- Build a reasoning orchestration workflow for the Plan stage that generates a plan in markdown from a chain-of-thought process.
-- Support the Revise stage by allowing users to review and edit the plan before execution.
-- Implement a Svelte UI that renders the markdown plan as HTML and supports location-specific comments on that HTML.
-- Build a Python backend that receives comments plus document location metadata and feeds both back into the LLM workflow.
-- Use ChatGPT via API as the LLM provider for planning and feedback-driven updates.
-- Return updated outputs to the UI after comment ingestion and LLM processing.
+- Build a small orchestration workflow that starts from a customer problem statement and decides after each step whether more information is needed or whether a plan should be created or refined.
+- Use OpenAI as the LLM provider for state checks, follow-up questions, plan generation, and plan refinement.
+- Generate the plan in markdown using the structure described in the Cursor feature-planning rule.
+- Support customer feedback on the plan through natural-language comments rather than a heavy review workflow.
+- Keep the latest markdown plan in the orchestration context for every later refinement step.
+- Serialize every orchestration step and saved state to disk so sessions can be inspected after the fact.
+- Stream all assistant responses back to the client to reduce perceived latency.
+- Keep the implementation intentionally simple and non-production:
+  - single-node
+  - file-backed persistence
+  - minimal observability beyond inspectable saved artifacts
 - Keep the Build stage explicitly out of PoC scope; include it only as future workflow context.
 
 ## Work Breakdown Structure
 
-1. Reasoning orchestration
-   1. Define orchestration steps for prompt intake, reasoning execution, and markdown plan output.
-   2. Implement markdown plan renderer/formatter in backend flow.
-2. Feedback UI
-   1. Build Svelte interface for rendering markdown-as-HTML and attaching comment threads/annotations at specific locations.
-   2. Capture and submit comment text with location anchors to backend endpoints.
-3. Backend feedback loop
-   1. Implement Python API endpoints for comment intake, location metadata, and context persistence.
-   2. Rehydrate the plan plus comments (with location context) into LLM refinement prompts.
-4. LLM integration
-   1. Integrate ChatGPT API client and request pipeline.
-   2. Handle retries, response validation, and error states.
+1. Orchestrator state and persistence
+   1. Define the saved session state, including the current plan and post-step state check.
+   2. Persist each turn and each orchestration step to disk for inspection.
+2. Clarification loop
+   1. Add the OpenAI-backed state check that decides whether follow-up questions are required.
+   2. Stream follow-up questions back to the customer when the system needs more information.
+3. Plan generation and refinement
+   1. Generate the initial markdown plan once enough information is available.
+   2. Reuse the same loop to refine the plan from customer comments.
+4. Streaming API and thin client integration
+   1. Add the POST endpoints needed to start a session and continue it.
+   2. Stream chat responses and markdown plans to the client.
 5. End-to-end validation
-   1. Verify Plan -> Revise cycle: plan generation -> UI rendering -> comment submission -> revised plan output.
+   1. Verify the loop: problem statement -> clarifying questions -> plan -> plan feedback -> refined plan.
 6. Future scope placeholder (non-PoC)
-   1. Document Build-stage execution requirements for a later milestone.
+   1. Document Build-stage execution requirements for a later milestone without implementing them now.
