@@ -1,0 +1,48 @@
+---
+description: When starting a new feature, write a detailed implementation plan before executing
+globs: []
+alwaysApply: true
+---
+
+# Feature Implementation Plan
+
+When starting a new feature, **write a detailed implementation plan** describing how it will be executed.
+
+## Required Structure
+
+The plan must include:
+
+### Goal
+
+A clear description of the feature—what it does, who it serves, and what success looks like.
+
+### Preconditions
+
+Any work that needs to be done before implementing:
+- Dependencies to install or configure
+- Data or environment setup
+- Prior tasks or milestones that must be complete
+- Access or permissions required
+
+### Used Tools
+
+Any MCP or other tools that are required:
+- MCP servers and their purpose
+- External APIs or services
+- Execution environments (e.g., Python, Node)
+- Other tooling (linters, formatters, test runners)
+
+### Steps
+
+Each sequential action that will be taken to achieve the goal:
+- Numbered or ordered list of concrete actions
+- Each step should be specific and actionable
+- Include file paths, commands, or API calls where relevant
+
+### Guardrails
+
+A list of constraints and checks to validate the solution:
+- Quality criteria (tests, lint, type checks)
+- Alignment with pillars and organizational standards
+- Edge cases or failure modes to handle
+- Validation steps before considering the work complete
