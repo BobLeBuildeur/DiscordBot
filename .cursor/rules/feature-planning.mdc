@@ -1,0 +1,84 @@
+---
+description: When starting a new feature, write a detailed implementation plan before executing
+globs: []
+alwaysApply: true
+---
+
+# Feature Implementation Plan
+
+When starting a new feature, **write a detailed implementation plan** describing how it will be executed.
+
+## Required Structure
+
+The plan must include:
+
+### Goal
+
+A clear description of the feature—what it does, who it serves, and what success looks like.
+
+**Example:** *Add a CSV export to the reports dashboard so Analysts can download data for offline analysis. Success: clicking "Export" produces a valid CSV file with the current view's data.*
+
+**Won't do:** Vague goals like "improve reports" or "add export" without specifying format, audience, or success criteria.
+
+---
+
+### Preconditions
+
+Any work that needs to be done before implementing:
+- Dependencies to install or configure
+- Data or environment setup
+- Prior tasks or milestones that must be complete
+- Access or permissions required
+
+**Example:** *Schema migration for `reports` table must be deployed. API key for `EXPORT_SERVICE` must be set in env. Python 3.11+ required.*
+
+**Won't do:** Skipping preconditions or assuming "everything is ready." Don't list unrelated setup.
+
+---
+
+### Used Tools
+
+Any MCP or other tools that are required:
+- MCP servers and their purpose
+- External APIs or services
+- Execution environments (e.g., Python, Node)
+- Other tooling (linters, formatters, test runners)
+
+**Example:** *MCP `filesystem` for reading/writing CSV. Python 3.11 for `pandas`. `pytest` for tests. `ruff` for lint.*
+
+**Won't do:** Listing tools "just in case" or omitting tools that are actually used. Don't include tools you won't invoke.
+
+---
+
+### Steps
+
+Each sequential action that will be taken to achieve the goal:
+- Numbered or ordered list of concrete actions
+- Each step should be specific and actionable
+- Include file paths, commands, or API calls where relevant
+
+**Example:**
+1. Add `export_csv()` in `src/reports/service.py` using pandas  
+   **Won't do:** Put logic in the route handler instead of a service; omit file path.
+2. Add `/api/reports/export` endpoint in `src/api/routes.py`  
+   **Won't do:** Skip error handling or response format; leave endpoint path vague.
+3. Add "Export" button in `src/dashboard/ReportView.tsx` calling the endpoint  
+   **Won't do:** Hardcode URLs or skip loading/error states; add button without wiring.
+4. Add unit tests in `tests/test_export.py`  
+   **Won't do:** Test only happy path; omit edge cases; put tests in wrong file.
+
+**Won't do (overall):** High-level steps like "implement export" or "add tests" without specifying where or how. Don't skip ordering or leave steps ambiguous.
+
+---
+
+### Guardrails
+
+A list of constraints and checks to validate the solution:
+- Quality criteria (tests, lint, type checks)
+- Alignment with pillars and organizational standards
+- Edge cases or failure modes to handle
+- Validation steps before considering the work complete
+
+**Example:** *Run `ruff check` and `pytest` before merge. Handle empty result set (return empty CSV, not error). Max file size 10MB. Verify pillar "No PII in exports" is satisfied.*
+
+**Won't do:** Generic guardrails like "write good code" or "test it." Don't omit edge cases or validation steps. Don't add guardrails that don't apply to this feature.
