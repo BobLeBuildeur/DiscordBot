@@ -50,15 +50,25 @@ Add a Python orchestration server that lets Analysts and Agents start a task, ex
 - Prefer fixtures for temporary session directories, seeded task states, and executor doubles.
 - Keep unit tests fast and deterministic by mocking external LLM or tool integrations.
 
+## Core Models and Types
+
+- `TaskState`: the top-level persisted object for one session. It is the canonical snapshot loaded from disk at the start of a request and written back at the end.
+- `PlanStep`: the structured representation of one executable step from the approved plan. It defines what work should happen, which executor handles it, and what status it is currently in.
+- `StepIteration`: one attempt to run a step. It captures the per-attempt timeline, summary, and retry history so the system can show what happened across multiple runs.
+- `TaskMetrics`: aggregate counters and measurements for the whole task, such as request count, completed-step count, durations, and last error metadata.
+- `MemoryEntry` or `memory: dict[str, str]`: the compact cross-step memory layer. It stores reusable summaries or artifacts from earlier steps so later steps can resume without hidden server memory.
+- `StepResult`: the normalized return type from an executor. It carries the outcome of one step run back into orchestration so the task state can be updated consistently.
+- status enum values such as `pending`, `running`, `completed`, `failed`, and `blocked`: the allowed lifecycle states for each step, used to validate legal transitions and next-step selection.
+
 ## Steps
 
 1. Define the domain model in `server/domain/state.py` and `server/domain/events.py`.
    - Create typed models for:
-     - `TaskState`
-     - `PlanStep`
-     - `StepIteration`
-     - `MemoryEntry` or `memory: dict[str, str]`
-     - `TaskMetrics`
+     - `TaskState` - the persisted session snapshot for one task
+     - `PlanStep` - one executable unit of work within the plan
+     - `StepIteration` - one recorded attempt to execute a step
+     - `MemoryEntry` or `memory: dict[str, str]` - reusable summaries carried across steps
+     - `TaskMetrics` - task-level counters and measurements
    - Extend the approximate state shape into a stricter schema with:
      - `status` enums such as `pending`, `running`, `completed`, `failed`, `blocked`
      - `current_step_id`
@@ -145,7 +155,7 @@ Add a Python orchestration server that lets Analysts and Agents start a task, ex
      - failure paths preserve partial history without corrupting prior steps
    - **Won't do:** test only happy paths; skip restart and concurrency coverage.
 
-9. Document the execution model in `docs/orchestration-server.md` or extend `README.md`.
+9. Document the execution model in a separate document such as `docs/orchestration-server.md`.
    - Explain the core loop explicitly:
      - User -> API -> load state -> run one step -> save state
    - Include a sample JSON session file and example request/response bodies.
@@ -153,7 +163,7 @@ Add a Python orchestration server that lets Analysts and Agents start a task, ex
      - no long-running daemon memory
      - no multi-step automatic background loop
      - no distributed persistence
-   - **Won't do:** leave the statelessness model implicit; document behavior differently from the API contract.
+   - **Won't do:** put this design documentation in `README.md`; leave the statelessness model implicit; document behavior differently from the API contract.
 
 ## Guardrails
 
@@ -169,6 +179,7 @@ Add a Python orchestration server that lets Analysts and Agents start a task, ex
   - `pending -> running -> completed`
   - `pending -> running -> failed`
   - `failed -> running -> completed` for retries
+- Keep design and API documentation in dedicated docs files rather than expanding the repository `README.md`.
 - Require unit tests for the state model, session store, and step runner before implementation is considered complete.
 - Run `ruff check`, `mypy`, and `pytest` before implementation is considered complete.
 - Confirm alignment with current repository pillars. At present, the repository contains pillar instructions but no concrete pillar files beyond `pillars/README.md`; if new pillars are added later, re-check this plan before implementation.
