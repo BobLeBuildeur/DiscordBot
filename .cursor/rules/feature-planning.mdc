@@ -58,12 +58,16 @@ Each sequential action that will be taken to achieve the goal:
 - Include file paths, commands, or API calls where relevant
 
 **Example:**
-1. Add `export_csv()` in `src/reports/service.py` using pandas
-2. Add `/api/reports/export` endpoint in `src/api/routes.py`
-3. Add "Export" button in `src/dashboard/ReportView.tsx` calling the endpoint
-4. Add unit tests in `tests/test_export.py`
+1. Add `export_csv()` in `src/reports/service.py` using pandas  
+   **Won't do:** Put logic in the route handler instead of a service; omit file path.
+2. Add `/api/reports/export` endpoint in `src/api/routes.py`  
+   **Won't do:** Skip error handling or response format; leave endpoint path vague.
+3. Add "Export" button in `src/dashboard/ReportView.tsx` calling the endpoint  
+   **Won't do:** Hardcode URLs or skip loading/error states; add button without wiring.
+4. Add unit tests in `tests/test_export.py`  
+   **Won't do:** Test only happy path; omit edge cases; put tests in wrong file.
 
-**Won't do:** High-level steps like "implement export" or "add tests" without specifying where or how. Don't skip ordering or leave steps ambiguous.
+**Won't do (overall):** High-level steps like "implement export" or "add tests" without specifying where or how. Don't skip ordering or leave steps ambiguous.
 
 ---
 
