@@ -3,7 +3,10 @@
 ## Problem
 
 Analysts need a first end-to-end product that can generate actionable plans and iteratively improve outputs from human feedback.  
-The system currently lacks a unified workflow that (1) orchestrates reasoning into a markdown plan and (2) captures UI comments on HTML for LLM-driven revision.
+The plan is expressed in markdown by the orchestration system and converted to HTML in the UI for review and commenting.
+
+This MVP also validates a market gap: business teams need agentic LLM workflows that are usable by average office workers who are not technical, are not interested in code as a deliverable, and do not use developer tools such as Cursor.  
+The current gap is the lack of a business-native experience that preserves powerful LLM reasoning while presenting work in familiar document-review patterns (read, comment, revise) instead of coding workflows.
 
 ## Core Workflow Model (Plan -> Revise -> Build)
 
