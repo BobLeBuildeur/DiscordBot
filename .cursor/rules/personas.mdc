@@ -1,0 +1,53 @@
+---
+description: Defines the personas who interact with the system—Analysts, Agents, and Knowledge Admins
+globs: []
+alwaysApply: true
+---
+
+# Personas
+
+A **persona** is someone (or something) that interacts with the system.
+
+## Analysts
+
+Primary users of the system.
+
+**Responsibilities:**
+- Create projects
+- Prompt the system to generate plans
+- Revise and approve plans
+- Review results and outputs
+- Supervise agent execution
+
+They act as managers of their agentic workforce.
+
+---
+
+## Agents
+
+Autonomous workers that perform tasks.
+
+**Responsibilities:**
+- Execute approved plans
+- Retrieve data from connected systems
+- Run analysis and calculations
+- Produce outputs such as tables, charts, and slides
+
+**Agents interact with:**
+- MCP servers
+- Python execution environments
+- Books in the knowledge base
+
+---
+
+## Knowledge Admins
+
+Humans responsible for maintaining the organization's Books.
+
+**Responsibilities:**
+- Creating and maintaining knowledge books
+- Defining SOPs and organizational standards
+- Encoding domain expertise
+- Ensuring consistency across agent workflows
+
+They ensure the organization's intelligence is accurate, reusable, and scalable.
