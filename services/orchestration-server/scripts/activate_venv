@@ -1,0 +1,22 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
+  echo "This script must be sourced:" >&2
+  echo "  source services/orchestration-server/scripts/activate_venv" >&2
+  exit 1
+fi
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+SERVICE_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
+VENV_DIR="${SERVICE_ROOT}/.venv"
+ACTIVATE_SCRIPT="${VENV_DIR}/bin/activate"
+
+if [[ ! -f "${ACTIVATE_SCRIPT}" ]]; then
+  echo "No virtual environment found at ${VENV_DIR}." >&2
+  echo "Run ${SERVICE_ROOT}/scripts/bootstrap_venv first." >&2
+  return 1
+fi
+
+source "${ACTIVATE_SCRIPT}"
