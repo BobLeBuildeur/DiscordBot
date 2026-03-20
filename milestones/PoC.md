@@ -104,5 +104,14 @@ flowchart TD
    2. Stream chat responses and markdown plans to the client.
 6. End-to-end validation
    1. Verify the loop: problem statement -> clarifying questions -> plan -> plan feedback -> refined plan.
+   2. Confirm each turn writes inspectable session snapshots plus append-only step artifacts under
+      `services/orchestration-server/data/orchestrator/`.
 7. Future scope placeholder (non-PoC)
    1. Document Build-stage execution requirements for a later milestone without implementing them now.
+
+## Implementation Notes
+
+- Keep the PoC implementation self-contained under `services/orchestration-server/` so the monorepo
+  boundary remains explicit.
+- Treat saved disk artifacts as the primary observability mechanism for this milestone rather than
+  adding production telemetry systems.
