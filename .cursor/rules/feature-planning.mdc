@@ -8,6 +8,13 @@ alwaysApply: true
 
 When starting a new feature, **write a detailed implementation plan** describing how it will be executed.
 
+## Where plans live
+
+- Store **implementation and feature plans** only under the repository root **`plans/`** directory.
+- **Do not** add implementation plans under `services/<service-name>/docs/` or other service-local `docs/` trees—those folders are for service runtime docs (README, API notes, ops), not monorepo-wide plans.
+- **Filename:** `YYYY-MM-DD-[plan-name].md` using the **ISO 8601 calendar date** (`YYYY-MM-DD`) for when the plan is **created**. Use lowercase kebab-case for `[plan-name]` (e.g. `2026-03-20-frontend-poc-ux-plan.md`).
+- **Renaming undated plans:** If an existing plan file has no date prefix, set the prefix from the document’s **git first-commit author date** (or the known creation date if never committed yet), then rename in `plans/` so the name matches the rule above.
+
 ## Required Structure
 
 The plan must include:

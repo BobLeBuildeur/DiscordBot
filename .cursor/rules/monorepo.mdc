@@ -17,7 +17,7 @@ This repository is a **monorepo**. It may contain multiple independent services,
   - prompts
   - tests
   - local runtime configuration
-  - service-specific docs
+  - service-specific docs (operational or API notes—not monorepo **implementation plans**; those belong in root **`plans/`**—see `.cursor/rules/feature-planning.mdc`)
 - Avoid scattering one service's files across unrelated top-level folders when they belong inside that service.
 - Prefer explicit service boundaries over cross-service imports or hidden coupling.
 
