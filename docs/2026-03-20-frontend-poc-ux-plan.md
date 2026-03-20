@@ -13,6 +13,7 @@ Ship the smallest possible analyst-facing UI that proves the orchestration flow 
 - **Monorepo:** A new self-contained service lives under **`services/orchestration-web/`** (name may be adjusted, but the UI remains a sibling service to `services/orchestration-server/`, not embedded inside it).
 - **Orchestration server** is running and reachable from the browser for the PoC (base URL via public env, e.g. `PUBLIC_ORCHESTRATION_API_URL`), with **CORS** allowed for the web app origin when dev/proxy differs.
 - **API contract:** The UI uses the orchestration HTTP API only—**`POST /orchestrator/sessions`** to start a session with the initial problem, and **`POST /orchestrator/sessions/{session_id}/messages`** for follow-ups. **`GET /orchestrator/sessions/{session_id}`** exists on the server but **must not** be used in this PoC to load prior transcript (see out of scope below).
+- **Agent payloads:** Server responses that appear in the history (the **agent** role) are **Markdown**. The client still applies the agreed strategy to extract embedded JSON (e.g. `session_id`) from the first response when needed; the string shown as the agent message body is then rendered as **HTML** inside **`HistoryItem`** (see implementation steps).
 - The first response shape is understood well enough to parse embedded JSON from the response text and read `session_id` so the client can navigate to the session URL and transition to “session active.”
 - **Tooling:** Node.js version compatible with the chosen SvelteKit release; `npm`/`pnpm`/`bun` per service lockfile once the app is scaffolded.
 
@@ -25,6 +26,7 @@ Ship the smallest possible analyst-facing UI that proves the orchestration flow 
 - **SvelteKit** as the application shell (routing, build, dev server).
 - **Svelte 5 with runes** (`$state`, `$derived`, `$props`, `$effect` as needed) for session-scoped UI state: message list, input value, in-flight requests, and parsed `session_id`.
 - **`fetch`** from the client (or small `src/lib` helpers) toward the orchestration server base URL—no extra API layer in another service.
+- **Markdown → HTML** for agent turns: a **small** Markdown compiler (e.g. `marked`, `markdown-it`, or similar lightweight choice) plus a **sanitization** pass before injecting HTML into the DOM (e.g. DOMPurify or an isomorphic equivalent), since Svelte `{@html …}` is unsafe without it.
 - **Default HTML controls** inside Svelte components (`<textarea>`, `<button>`, semantic wrappers); **minimal component-local or global CSS** only where defaults are insufficient.
 
 **Won’t do:** Adopt a design system, component library, or E2E runner (Playwright/Cypress/etc.) for this PoC.
@@ -42,8 +44,8 @@ Ship the smallest possible analyst-facing UI that proves the orchestration flow 
 
 | Action | HTTP | Notes |
 |--------|------|--------|
-| Start session + initial problem | `POST {base}/orchestrator/sessions` | Body matches server contract; response text parsed for JSON / `session_id`. |
-| Send follow-up | `POST {base}/orchestrator/sessions/{session_id}/messages` | `session_id` from first response and from the URL segment after navigation. |
+| Start session + initial problem | `POST {base}/orchestrator/sessions` | Body matches server contract; response body includes **Markdown** for display; response text parsed for JSON / `session_id` per agreed rules. |
+| Send follow-up | `POST {base}/orchestrator/sessions/{session_id}/messages` | Same: agent-visible content is **Markdown** rendered to HTML in **`HistoryItem`**. |
 | Load existing transcript | `GET …/sessions/{session_id}` | **Out of scope** for this PoC—do not implement hydration from this endpoint. |
 
 - **Base URL** is configured for the browser (e.g. SvelteKit `PUBLIC_ORCHESTRATION_API_URL`). Local dev may use a Vite proxy to the orchestration server to simplify CORS during development; that is an implementation detail inside the web service.
@@ -67,7 +69,7 @@ Every **named UI building block** in [Interface composition](#interface-composit
 | Design concept | Svelte module (under `src/lib/…` or colocated) | Responsibility |
 |----------------|-----------------------------------------------|----------------|
 | **History** (scrollable list container) | e.g. `History.svelte` | Renders an ordered list of items; owns scroll-to-bottom behavior for its container; receives the list of turns via props or parent runes. |
-| **History item** | e.g. `HistoryItem.svelte` | **Props:** message body + **`role: 'agent' \| 'analyst'`** (or equivalent prop name). Applies minimal styling per role. |
+| **History item** | e.g. `HistoryItem.svelte` | **Props:** message body + **`role: 'agent' \| 'analyst'`**. For **`analyst`**, render body as **plain text** (escaped). For **`agent`**, convert **Markdown → HTML** (then **sanitize**) and render inside the component (e.g. Svelte `{@html}` into a single wrapper). Applies minimal styling per role. |
 | **Input** (textarea + send) | e.g. `MessageInput.svelte` | Controlled value, submit action, optional disabled state while sending. |
 
 - **Route files** (`+page.svelte`, optional `+layout.svelte`) **compose** these components; they may hold page-level rune state and `fetch` orchestration, but the **three design components above remain distinct Svelte components** rather than inlined duplicates.
@@ -88,7 +90,7 @@ Every **named UI building block** in [Interface composition](#interface-composit
 1. **First open:** Analyst lands on the app and immediately sees the **input** component (history may be empty or a single neutral placeholder—keep it minimal).
 2. **Ready to start session:** Analyst types the **initial problem** and submits.
 3. **Request:** Front end sends **one** request that starts a new session and includes the problem statement.
-4. **First response:** Server reply is rendered as a new **history item** with role **agent**; client extracts JSON from the text, obtains **session id**, **updates the browser URL** to include that id (e.g. `/session/{sessionId}`), and state becomes **session active**.
+4. **First response:** Server reply (Markdown) is rendered as a new **history item** with role **agent** as **HTML**; client extracts JSON from the text, obtains **session id**, **updates the browser URL** to include that id (e.g. `/session/{sessionId}`), and state becomes **session active**.
 5. **Ongoing:** For each further user message, client calls the **messages** endpoint for the current session (using the id from the URL); each analyst turn and each agent turn is a new **history item** appended at the **bottom** in order; after send and after new responses, the view **scrolls to the bottom**.
 
 ---
@@ -116,7 +118,7 @@ Every **named UI building block** in [Interface composition](#interface-composit
 **And** the app stores the **session id** for subsequent calls (and reads it from the URL on the session route)  
 **And** the **session id is appended to the URL** (path segment) via client-side navigation  
 **And** the state moves to **session active**  
-**And** the response (or a readable rendering of it) appears in the history as a **history item** with role **agent**.
+**And** the response appears in the history as a **history item** with role **agent**, with **Markdown converted to HTML** (and sanitized) for display.
 
 ### Session active — user message
 
@@ -131,7 +133,7 @@ Every **named UI building block** in [Interface composition](#interface-composit
 
 **Given** the session is active  
 **When** a response is received  
-**Then** the response text is appended at the **bottom** of the history as a **history item** with role **agent**  
+**Then** the response Markdown is appended at the **bottom** of the history as a **history item** with role **agent**, **rendered as HTML** in that item  
 **And** the page **scrolls to the bottom**.
 
 ---
@@ -140,11 +142,11 @@ Every **named UI building block** in [Interface composition](#interface-composit
 
 - **Implementation rule:** Each of the following conceptual components is a **Svelte component** (`.svelte`); see [Svelte component mapping](#svelte-component-mapping) for file-level mapping.
 - **Two main regions:** (1) **History** — a vertical sequence of **history item** components in chronological order; (2) **Input** — textbox + send button.
-- **History item component:** Each message in the thread is one **history item**. Items are rendered **in sequence** (document order = conversation order). A **single property** on each item defines the speaker for both semantics and styling: **`agent`** (orchestrator / server-side response) or **`analyst`** (human input). Implementation may use a prop name such as `role`, `speaker`, or `kind` as long as the allowed values are exactly **`agent`** and **`analyst`**.
+- **History item component:** Each message in the thread is one **history item**. Items are rendered **in sequence** (document order = conversation order). A **single property** on each item defines the speaker for both semantics and styling: **`agent`** (orchestrator / server-side response) or **`analyst`** (human input). Implementation may use a prop name such as `role`, `speaker`, or `kind` as long as the allowed values are exactly **`agent`** and **`analyst`**. **Agent** bodies are **Markdown** parsed to HTML **inside `HistoryItem`**; **analyst** bodies stay **plain text** (no Markdown interpretation).
 - **History container:** New items are always appended **at the bottom** of the list so the natural reading order matches turn order.
 - **Input:** Single textbox and send button; disable send while a request is in flight if that avoids duplicate submissions (optional guardrail—only if default UX suffers without it).
 - **Visual distinction:** **Agent** vs **analyst** items must be **visually distinct** using the **minimum** custom CSS, driven by the item’s role property (e.g. `data-role="agent"` / `data-role="analyst"`, or class names derived from the same enum)—labels, borders, or light background tints are enough; no full theme.
-- **Styling:** Default HTML appearance everywhere else; no typography or color exploration beyond clarity and the two roles.
+- **Styling:** Default HTML appearance everywhere else; no typography or color exploration beyond clarity and the two roles. Add **only** scoped rules if needed so Markdown output (e.g. `pre`, `code`, lists) remains readable inside the agent **`HistoryItem`** wrapper.
 
 ---
 
@@ -169,9 +171,12 @@ Every **named UI building block** in [Interface composition](#interface-composit
    *Won’t do:* prepend messages or require manual scroll.
 
 7. **History rendering:** **`HistoryItem.svelte`** per turn; **`History.svelte`** maps the list and handles scroll-to-bottom.  
-   *Won’t do:* one monolithic transcript blob; rich markdown unless explicitly required.
+   *Won’t do:* one monolithic transcript blob.
 
-8. **Smoke validation:** Manual walkthrough against a running orchestration server; **no E2E framework** for this PoC. Optional **unit tests** for pure helpers (e.g. JSON extraction) only if low-cost.  
+8. **Agent Markdown in `HistoryItem`:** Implement a single rendering path for **`role === 'agent'`**: run the body through **Markdown → HTML**, then **sanitize** the HTML string, then bind with **`{@html …}`** (or equivalent) inside a dedicated wrapper element in **`HistoryItem.svelte`** so lists, code fences, emphasis, etc. display correctly. For **`role === 'analyst'`**, render with normal text binding so user input is not interpreted as HTML/Markdown.  
+   *Won’t do:* skip sanitization when using `{@html}`; run Markdown for analyst messages.
+
+9. **Smoke validation:** Manual walkthrough against a running orchestration server; **no E2E framework** for this PoC. Optional **unit tests** for pure helpers (e.g. JSON extraction, sanitize + markdown pipeline) only if low-cost.  
    *Won’t do:* Playwright/Cypress (or similar) as a project dependency for this milestone.
 
 ---
@@ -181,11 +186,12 @@ Every **named UI building block** in [Interface composition](#interface-composit
 - **Monorepo boundary:** UI code and dependencies live under **`services/orchestration-web/`**; call **`services/orchestration-server/`** only via HTTP.
 - **Size:** Few files, minimal dependencies; every addition must trace to a stated BDD or NFR; **no design-system or E2E** dependencies.
 - **Contract:** Document `PUBLIC_ORCHESTRATION_API_URL`, `POST /orchestrator/sessions`, and `POST /orchestrator/sessions/{id}/messages` in the web service README; keep request/response shapes aligned with server tests.
-- **Parsing:** Define one clear strategy for “JSON in text” (e.g. fenced block, last JSON object, regex)—same behavior on success and clear error on failure.
+- **Parsing:** Define one clear strategy for “JSON in text” (e.g. fenced block, last JSON object, regex)—same behavior on success and clear error on failure. After extraction, the **display string** passed to **`HistoryItem`** for the agent should still be valid **Markdown** (e.g. strip only the JSON block if the contract calls for separation).
+- **Markdown safety:** Never inject unsanitized HTML from the server; **sanitize** after Markdown compilation and before `{@html}`.
 - **URL:** After session start, **session id must appear in the path**; do not rely on hidden global state alone for the active id.
 - **Out of scope reminder:** No **GET**-based **chat restore**, no **design system**, no **E2E testing framework**.
 - **Accessibility (light touch):** Use labels associated with the textarea and a sensible button name so default focus/tab order remains usable.
-- **Done means:** All Gherkin scenarios are demonstrable in the browser with Svelte components as specified, default-plus-minimal styling, **`agent` vs `analyst`** history items, and URL updating after the first response.
+- **Done means:** All Gherkin scenarios are demonstrable in the browser with Svelte components as specified, default-plus-minimal styling, **`agent` vs `analyst`** history items, **agent Markdown rendered as sanitized HTML in `HistoryItem`**, and URL updating after the first response.
 
 ---
 
@@ -200,6 +206,8 @@ Every **named UI building block** in [Interface composition](#interface-composit
 | Follow-up → messages API | `POST /orchestrator/sessions/{id}/messages` with param from URL |
 | Append + clear + scroll | **MessageInput** + **History** + **HistoryItem** (`analyst`) |
 | Agent vs analyst styling | **HistoryItem** `role` prop + minimal CSS |
+| Agent Markdown → HTML | **HistoryItem**: markdown lib + sanitize + `{@html}` |
+| Analyst plain text | **HistoryItem**: text/escaped content, no Markdown |
 | No transcript restore | Do not call `GET /orchestrator/sessions/{id}` for history |
 
 This plan is intentionally narrow so implementation can stay small while still validating the concept with a realistic Analyst session, a dedicated **orchestration-web** service, and **SvelteKit + runes** aligned to the existing orchestration HTTP API.
