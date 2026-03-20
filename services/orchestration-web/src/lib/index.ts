@@ -1,0 +1,6 @@
+export { default as History } from './components/History.svelte';
+export { default as HistoryItem } from './components/HistoryItem.svelte';
+export { default as MessageInput } from './components/MessageInput.svelte';
+export { renderMarkdown } from './markdown.js';
+export { startSession, sendMessage } from './api.js';
+export type { Message, Role, SessionEvent, ChunkEvent, FinalEvent } from './types.js';
