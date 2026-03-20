@@ -1,0 +1,27 @@
+---
+description: Treat this repository as a monorepo with independent services
+globs: []
+alwaysApply: true
+---
+
+# Monorepo Layout
+
+This repository is a **monorepo**. It may contain multiple independent services, packages, and supporting documents.
+
+## Rules
+
+- Treat the repository root as shared monorepo space, not as the home for one service's application code.
+- Put service-specific code in a dedicated service folder such as `services/<service-name>/`.
+- Keep each service as self-contained as practical:
+  - source code
+  - prompts
+  - tests
+  - local runtime configuration
+  - service-specific docs
+- Avoid scattering one service's files across unrelated top-level folders when they belong inside that service.
+- Prefer explicit service boundaries over cross-service imports or hidden coupling.
+
+## Current expectation for this PoC
+
+- The agentic orchestrator should live in its own folder: `services/orchestration-server/`.
+- Future work on the orchestration server should assume it is independent from the rest of the monorepo unless a shared package is intentionally introduced later.

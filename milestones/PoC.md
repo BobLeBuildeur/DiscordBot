@@ -70,6 +70,7 @@ flowchart TD
 - Build a small orchestration workflow that starts from a customer problem statement and decides after each step whether more information is needed or whether a plan should be created or refined.
 - Use OpenAI as the LLM provider for state checks, follow-up questions, plan generation, and plan refinement.
 - Store the system prompts as markdown documents in the repository and load the correct prompt based on orchestration state.
+- Build the orchestration server as its own independent service inside the monorepo, for example under `services/orchestration-server/`.
 - Generate the plan in markdown using the structure described in the Cursor feature-planning rule.
 - Return a confidence level from the LLM on every step, not only during state checks.
 - If the returned confidence is below a configurable threshold, ask the analyst more follow-up questions before creating or refining the plan.
@@ -85,20 +86,23 @@ flowchart TD
 
 ## Work Breakdown Structure
 
-1. Orchestrator state and persistence
+1. Monorepo service layout
+   1. Create a self-contained monorepo service folder for the orchestration server.
+   2. Keep the service's code, prompts, tests, and local runtime files inside that folder.
+2. Orchestrator state and persistence
    1. Define the saved session state, including the current plan and post-step state check.
    2. Persist each turn and each orchestration step to disk for inspection.
-2. Clarification loop
+3. Clarification loop
    1. Add the OpenAI-backed state check that decides whether follow-up questions are required and returns a confidence level.
    2. Stream follow-up questions back to the customer when the system needs more information or confidence is below threshold.
-3. Plan generation and refinement
+4. Plan generation and refinement
    1. Generate the initial markdown plan once enough information is available and confidence is high enough.
    2. Reuse the same loop to refine the plan from customer comments.
    3. Load different markdown prompt documents for problem understanding, plan generation, and plan refinement.
-4. Streaming API and thin client integration
+5. Streaming API and thin client integration
    1. Add the POST endpoints needed to start a session and continue it.
    2. Stream chat responses and markdown plans to the client.
-5. End-to-end validation
+6. End-to-end validation
    1. Verify the loop: problem statement -> clarifying questions -> plan -> plan feedback -> refined plan.
-6. Future scope placeholder (non-PoC)
+7. Future scope placeholder (non-PoC)
    1. Document Build-stage execution requirements for a later milestone without implementing them now.
