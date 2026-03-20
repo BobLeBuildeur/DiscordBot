@@ -360,7 +360,7 @@ This keeps the loop adaptive without introducing hidden logic outside the saved 
      - streamed responses finishing with a persisted final state
    - **Won't do:** depend on live OpenAI calls in CI; test only the happy path.
 
-9. Update supporting docs in `milestones/PoC.md` and a short implementation note such as `docs/orchestrator-poc.md` if a new docs folder is added.
+9. Update supporting docs in `milestones/PoC.md` and, if needed, a dated plan under root `plans/` (e.g. `YYYY-MM-DD-orchestrator-poc.md` per `.cursor/rules/feature-planning.mdc`).
    - Align the milestone with the smaller `problem -> clarify -> plan -> refine` loop.
    - Document that observability for the PoC is disk inspectability rather than dashboards or production telemetry.
    - **Won't do:** reintroduce Build-stage scope or expand the README into full system design docs.
