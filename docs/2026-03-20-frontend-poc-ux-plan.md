@@ -36,15 +36,15 @@ Ship the smallest possible analyst-facing UI that proves the orchestration flow 
 | State | What they see | What they can do |
 |--------|----------------|------------------|
 | **First open / ready to start session** | Empty or welcome history plus the input (textarea + send). | Enter the initial problem and send once. |
-| **Session active** | History shows their messages and system responses, newest at the bottom. | Send follow-up messages; input clears after send; view scrolls to latest. |
+| **Session active** | History is a **sequence of history item components** (each turn is one item), newest at the bottom. | Send follow-up messages; input clears after send; view scrolls to latest. |
 
 ### Journey (numbered)
 
 1. **First open:** Analyst lands on the app and immediately sees the **input** component (history may be empty or a single neutral placeholder—keep it minimal).
 2. **Ready to start session:** Analyst types the **initial problem** and submits.
 3. **Request:** Front end sends **one** request that starts a new session and includes the problem statement.
-4. **First response:** Server reply appears in the **history**; client extracts JSON from the text, persists **session id**, state becomes **session active**.
-5. **Ongoing:** For each further user message, client calls the **messages** endpoint for the current session; each user line and each server line is appended at the **bottom** of the history; after send and after new responses, the view **scrolls to the bottom**.
+4. **First response:** Server reply is rendered as a new **history item** with role **agent**; client extracts JSON from the text, persists **session id**, state becomes **session active**.
+5. **Ongoing:** For each further user message, client calls the **messages** endpoint for the current session; each analyst turn and each agent turn is a new **history item** appended at the **bottom** in order; after send and after new responses, the view **scrolls to the bottom**.
 
 ---
 
@@ -60,7 +60,8 @@ Ship the smallest possible analyst-facing UI that proves the orchestration flow 
 
 **Given** the app is ready to start a session  
 **When** the analyst provides the first prompt  
-**Then** the app sends the problem statement to the API that **starts** a new session (not the follow-up messages route).
+**Then** the app sends the problem statement to the API that **starts** a new session (not the follow-up messages route)  
+**And** the problem statement appears in the history as a **history item** with role **analyst**.
 
 ### First response → session active
 
@@ -69,14 +70,14 @@ Ship the smallest possible analyst-facing UI that proves the orchestration flow 
 **Then** the app extracts JSON content from the response text (per agreed parsing rules)  
 **And** the app stores the **session id** for subsequent calls  
 **And** the state moves to **session active**  
-**And** the response (or a readable rendering of it) appears in the history.
+**And** the response (or a readable rendering of it) appears in the history as a **history item** with role **agent**.
 
 ### Session active — user message
 
 **Given** the session is active  
 **When** the analyst sends a new input  
 **Then** the message is sent to the **messages** endpoint for the current session  
-**And** the user’s text is appended at the **bottom** of the history  
+**And** the user’s text is appended at the **bottom** of the history as a **history item** with role **analyst**  
 **And** the input is **cleared**  
 **And** the page (history region) **scrolls to the bottom**.
 
@@ -84,17 +85,18 @@ Ship the smallest possible analyst-facing UI that proves the orchestration flow 
 
 **Given** the session is active  
 **When** a response is received  
-**Then** the response text is appended at the **bottom** of the history  
+**Then** the response text is appended at the **bottom** of the history as a **history item** with role **agent**  
 **And** the page **scrolls to the bottom**.
 
 ---
 
 ## Interface composition (non-functional)
 
-- **Two main regions:** (1) **History** — server and user turns; (2) **Input** — textbox + send button.
-- **History:** New entries always append **at the bottom**; implement as a vertical list or stacked blocks with natural document flow so “bottom” matches reading order.
+- **Two main regions:** (1) **History** — a vertical sequence of **history item** components in chronological order; (2) **Input** — textbox + send button.
+- **History item component:** Each message in the thread is one **history item**. Items are rendered **in sequence** (document order = conversation order). A **single property** on each item defines the speaker for both semantics and styling: **`agent`** (orchestrator / server-side response) or **`analyst`** (human input). Implementation may use a prop name such as `role`, `speaker`, or `kind` as long as the allowed values are exactly **`agent`** and **`analyst`**.
+- **History container:** New items are always appended **at the bottom** of the list so the natural reading order matches turn order.
 - **Input:** Single textbox and send button; disable send while a request is in flight if that avoids duplicate submissions (optional guardrail—only if default UX suffers without it).
-- **Visual distinction:** Analyst vs system messages must be **visually distinct** with the **minimum** custom CSS (e.g. labels, borders, or background tints)—prefer semantic elements (`<article>`, headings, or `data-role`) plus tiny rules over a full theme.
+- **Visual distinction:** **Agent** vs **analyst** items must be **visually distinct** using the **minimum** custom CSS, driven by the item’s role property (e.g. `data-role="agent"` / `data-role="analyst"`, or class names derived from the same enum)—labels, borders, or light background tints are enough; no full theme.
 - **Styling:** Default HTML appearance everywhere else; no typography or color exploration beyond clarity and the two roles.
 
 ---
@@ -107,17 +109,17 @@ Ship the smallest possible analyst-facing UI that proves the orchestration flow 
 2. **State machine (implicit or explicit):** `idle_new_session` ↔ `session_active` driven by presence of `session_id` and successful first response.  
    *Won’t do:* extra states (e.g. “draft”) unless required for error recovery.
 
-3. **First-send path:** On first submit, call start-session with the problem body; show a minimal loading indicator or disabled send if needed so the Analyst knows something is happening.  
+3. **First-send path:** On first submit, append a **history item** with role **`analyst`** (the problem statement), then call start-session with the same body; show a minimal loading indicator or disabled send if needed so the Analyst knows something is happening.  
    *Won’t do:* block the UI without feedback on slow networks.
 
-4. **Parse and store:** On first response, run the agreed JSON extraction on the response text, read `session_id`, then render the message in history and flip to `session_active`.  
+4. **Parse and store:** On first response, run the agreed JSON extraction on the response text, read `session_id`, append a **history item** with role **`agent`** for the visible response, then flip to `session_active`.  
    *Won’t do:* silently drop failures—surface a short inline error in the history or under the input.
 
-5. **Follow-up path:** On subsequent submits, POST to messages with stored `session_id`; append user line, clear input, scroll history to bottom; on response, append system line, scroll again.  
+5. **Follow-up path:** On subsequent submits, POST to messages with stored `session_id`; append **`analyst`** history item, clear input, scroll history to bottom; on response, append **`agent`** history item, scroll again.  
    *Won’t do:* prepend messages or require manual scroll.
 
-6. **History rendering:** Append DOM nodes or text blocks per message; tag each entry as user vs system for styling.  
-   *Won’t do:* rich markdown rendering unless the PoC explicitly requires it.
+6. **History rendering:** Implement a reusable **history item** component (or equivalent primitive) and append one instance per turn. Each instance receives body text plus the **`agent` | `analyst`** property; the history list only composes these items in order.  
+   *Won’t do:* one monolithic blob for the whole transcript; rich markdown rendering unless the PoC explicitly requires it.
 
 7. **Smoke validation:** Manual walkthrough of the full journey against a running API; optionally one automated test if the repo already has a front-end test harness—otherwise document the manual checklist.  
    *Won’t do:* large E2E matrix; keep checks aligned to the Gherkin above.
@@ -130,7 +132,7 @@ Ship the smallest possible analyst-facing UI that proves the orchestration flow 
 - **Contract:** Document the exact start-session and messages URLs, method, and body shape next to the UI code or in this plan’s appendix when implemented.
 - **Parsing:** Define one clear strategy for “JSON in text” (e.g. fenced block, last JSON object, regex)—same behavior on success and clear error on failure.
 - **Accessibility (light touch):** Use labels associated with the textarea and a sensible button name so default focus/tab order remains usable.
-- **Done means:** All Gherkin scenarios above are demonstrable in the browser with default-plus-minimal styling and two visually distinct message types in the history.
+- **Done means:** All Gherkin scenarios above are demonstrable in the browser with default-plus-minimal styling, a **sequence of history item components**, and two visually distinct variants driven by **`agent` vs `analyst`** on each item.
 
 ---
 
@@ -140,8 +142,9 @@ Ship the smallest possible analyst-facing UI that proves the orchestration flow 
 |-------------|-------------|
 | First open shows input | Layout + initial state |
 | First send → start session | Wire first submit to start-session API |
-| First response → JSON + session id + active | Parser + state + history line |
+| First response → JSON + session id + active | Parser + state + history item (`agent`) |
 | Follow-up → messages API | Wire submit when `session_id` present |
-| Append + clear + scroll | Input handler + history container scroll |
+| Append + clear + scroll | Input handler + history item (`analyst`) + scroll container |
+| Agent vs analyst styling | History item role property + minimal CSS |
 
 This plan is intentionally narrow so implementation can stay small while still validating the concept with a realistic Analyst session.
