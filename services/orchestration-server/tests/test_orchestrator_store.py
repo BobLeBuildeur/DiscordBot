@@ -10,9 +10,17 @@ def test_store_persists_session_and_step_artifacts(test_settings):
     store = FileBackedSessionStore(test_settings.data_root)
     session = store.create_session("Build a quarterly sales planning workflow.")
 
-    user_turn = TurnRecord(role=TurnRole.USER, kind="problem_statement", content=session.problem_statement)
+    user_turn = TurnRecord(
+        role=TurnRole.USER,
+        kind="problem_statement",
+        content=session.problem_statement,
+    )
     session.conversation_history.append(user_turn)
-    store.append_step_artifact(session, "user-message", {"turn": user_turn.model_dump(mode="json")})
+    store.append_step_artifact(
+        session,
+        "user-message",
+        {"turn": user_turn.model_dump(mode="json")},
+    )
     store.append_step_artifact(
         session,
         "state-check",

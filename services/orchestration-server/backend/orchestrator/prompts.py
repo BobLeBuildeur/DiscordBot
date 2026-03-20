@@ -89,7 +89,5 @@ class PromptManager:
         lines: list[str] = []
         for turn in session.conversation_history:
             role = "Analyst" if turn.role == TurnRole.USER else "Assistant"
-            lines.append(
-                f"- {role} ({turn.kind}) at {turn.created_at.isoformat()}: {turn.content}"
-            )
+            lines.append(f"- {role} ({turn.kind}) at {turn.created_at.isoformat()}: {turn.content}")
         return "\n".join(lines)

@@ -1,14 +1,13 @@
 from __future__ import annotations
 
 import json
-from typing import Iterator
+from typing import Annotated, Iterator
 
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
 from backend.orchestrator.engine import OrchestrationResult, OrchestratorEngine
-
 
 router = APIRouter(prefix="/orchestrator", tags=["orchestrator"])
 
@@ -39,7 +38,7 @@ def _stream_result(result: OrchestrationResult) -> Iterator[str]:
 @router.post("/sessions")
 def create_session(
     payload: CreateSessionRequest,
-    engine: OrchestratorEngine = Depends(get_engine),
+    engine: Annotated[OrchestratorEngine, Depends(get_engine)],
 ) -> StreamingResponse:
     result = engine.start_session(payload.problem_statement)
     return StreamingResponse(_stream_result(result), media_type="text/event-stream")
@@ -49,7 +48,7 @@ def create_session(
 def add_message(
     session_id: str,
     payload: SessionMessageRequest,
-    engine: OrchestratorEngine = Depends(get_engine),
+    engine: Annotated[OrchestratorEngine, Depends(get_engine)],
 ) -> StreamingResponse:
     result = engine.advance_session(session_id, payload.message)
     return StreamingResponse(_stream_result(result), media_type="text/event-stream")
@@ -58,7 +57,7 @@ def add_message(
 @router.get("/sessions/{session_id}")
 def get_session(
     session_id: str,
-    engine: OrchestratorEngine = Depends(get_engine),
+    engine: Annotated[OrchestratorEngine, Depends(get_engine)],
 ) -> dict[str, object]:
     session = engine.get_session(session_id)
     return session.model_dump(mode="json")

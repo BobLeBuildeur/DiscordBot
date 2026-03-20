@@ -6,13 +6,23 @@ from fastapi.testclient import TestClient
 
 from backend.app import create_app
 from backend.orchestrator.engine import OrchestratorEngine
-from backend.orchestrator.models import GeneratedResponse, NextAction, PromptResponseMetadata, StateCheck
+from backend.orchestrator.models import (
+    GeneratedResponse,
+    NextAction,
+    PromptResponseMetadata,
+    StateCheck,
+)
 from backend.orchestrator.prompts import PromptManager
 from backend.orchestrator.store import FileBackedSessionStore
 from tests.conftest import FakeLLMClient
 
 
-def _response(content: str, prompt_name: str, prompt_path: str, confidence: float) -> GeneratedResponse:
+def _response(
+    content: str,
+    prompt_name: str,
+    prompt_path: str,
+    confidence: float,
+) -> GeneratedResponse:
     return GeneratedResponse(
         content=content,
         metadata=PromptResponseMetadata(
@@ -76,7 +86,11 @@ def test_api_streams_session_and_persists_final_state(test_settings):
         ],
         plan_responses=[
             _response(
-                "## Goal\n\nDraft the plan.\n\n## Preconditions\n\n- Audience known.\n\n## Used Tools\n\n- FastAPI.\n\n## Steps\n\n1. Draft the workflow.\n\n## Guardrails\n\n- Keep artifacts on disk.",
+                (
+                    "## Goal\n\nDraft the plan.\n\n## Preconditions\n\n- Audience known.\n\n"
+                    "## Used Tools\n\n- FastAPI.\n\n## Steps\n\n1. Draft the workflow.\n\n"
+                    "## Guardrails\n\n- Keep artifacts on disk."
+                ),
                 "Plan Generation",
                 str(test_settings.prompt_root / "plan-generation.md"),
                 0.93,
@@ -101,7 +115,9 @@ def test_api_streams_session_and_persists_final_state(test_settings):
     with client.stream(
         "POST",
         f"/orchestrator/sessions/{session_id}/messages",
-        json={"message": "The audience is operations leadership and success means faster approvals."},
+        json={
+            "message": ("The audience is operations leadership and success means faster approvals.")
+        },
     ) as response:
         assert response.status_code == 200
         second_stream = "".join(response.iter_text())

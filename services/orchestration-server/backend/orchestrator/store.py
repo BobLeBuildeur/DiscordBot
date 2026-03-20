@@ -41,7 +41,11 @@ class FileBackedSessionStore:
         kind: str,
         payload: dict[str, Any],
     ) -> Path:
-        artifact = StepArtifact(step_index=self._next_step_index(session), kind=kind, payload=payload)
+        artifact = StepArtifact(
+            step_index=self._next_step_index(session),
+            kind=kind,
+            payload=payload,
+        )
         filename = f"{artifact.step_index:03d}-{kind}.json"
         target = self.steps_dir(session.session_id) / filename
         self._atomic_write_text(
@@ -65,7 +69,11 @@ class FileBackedSessionStore:
         metadata_target = (
             self.steps_dir(session.session_id) / f"{metadata_index:03d}-{kind}-metadata.json"
         )
-        artifact = StepArtifact(step_index=metadata_index, kind=f"{kind}-metadata", payload=metadata)
+        artifact = StepArtifact(
+            step_index=metadata_index,
+            kind=f"{kind}-metadata",
+            payload=metadata,
+        )
         self._atomic_write_text(
             metadata_target,
             json.dumps(artifact.model_dump(mode="json"), indent=2, sort_keys=True),

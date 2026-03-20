@@ -106,7 +106,11 @@ class OrchestratorEngine:
             },
         )
 
-        response, assistant_kind = self._generate_response(session, latest_user_message, state_check)
+        response, assistant_kind = self._generate_response(
+            session,
+            latest_user_message,
+            state_check,
+        )
 
         assistant_turn = TurnRecord(
             role=TurnRole.ASSISTANT,

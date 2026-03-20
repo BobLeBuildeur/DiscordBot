@@ -1,13 +1,23 @@
 from __future__ import annotations
 
 from backend.orchestrator.engine import OrchestratorEngine
-from backend.orchestrator.models import GeneratedResponse, NextAction, PromptResponseMetadata, StateCheck
+from backend.orchestrator.models import (
+    GeneratedResponse,
+    NextAction,
+    PromptResponseMetadata,
+    StateCheck,
+)
 from backend.orchestrator.prompts import PromptManager
 from backend.orchestrator.store import FileBackedSessionStore
 from tests.conftest import FakeLLMClient
 
 
-def _response(content: str, prompt_name: str, prompt_path: str, confidence: float) -> GeneratedResponse:
+def _response(
+    content: str,
+    prompt_name: str,
+    prompt_path: str,
+    confidence: float,
+) -> GeneratedResponse:
     return GeneratedResponse(
         content=content,
         metadata=PromptResponseMetadata(
@@ -41,7 +51,10 @@ def test_engine_asks_follow_up_when_confidence_is_below_threshold(test_settings)
         ],
         follow_up_responses=[
             _response(
-                "I understand the broad goal. Who will use this output, and what decisions should it support?",
+                (
+                    "I understand the broad goal. Who will use this output, "
+                    "and what decisions should it support?"
+                ),
                 "Problem Understanding",
                 str(test_settings.prompt_root / "problem-understanding.md"),
                 0.58,
@@ -97,7 +110,11 @@ def test_engine_generates_and_refines_plan_with_latest_plan_in_context(test_sett
         ],
         plan_responses=[
             _response(
-                "## Goal\n\nCreate the first plan.\n\n## Preconditions\n\n- Clarified audience.\n\n## Used Tools\n\n- FastAPI.\n\n## Steps\n\n1. Create the workflow.\n\n## Guardrails\n\n- Keep it inspectable.",
+                (
+                    "## Goal\n\nCreate the first plan.\n\n## Preconditions\n\n"
+                    "- Clarified audience.\n\n## Used Tools\n\n- FastAPI.\n\n## Steps\n\n"
+                    "1. Create the workflow.\n\n## Guardrails\n\n- Keep it inspectable."
+                ),
                 "Plan Generation",
                 str(test_settings.prompt_root / "plan-generation.md"),
                 0.92,
@@ -105,7 +122,11 @@ def test_engine_generates_and_refines_plan_with_latest_plan_in_context(test_sett
         ],
         refinement_responses=[
             _response(
-                "## Goal\n\nCreate a revised plan for executives.\n\n## Preconditions\n\n- Clarified audience.\n\n## Used Tools\n\n- FastAPI.\n\n## Steps\n\n1. Revise the workflow.\n\n## Guardrails\n\n- Keep it inspectable.",
+                (
+                    "## Goal\n\nCreate a revised plan for executives.\n\n## Preconditions\n\n"
+                    "- Clarified audience.\n\n## Used Tools\n\n- FastAPI.\n\n## Steps\n\n"
+                    "1. Revise the workflow.\n\n## Guardrails\n\n- Keep it inspectable."
+                ),
                 "Plan Refinement",
                 str(test_settings.prompt_root / "plan-refinement.md"),
                 0.94,
@@ -118,12 +139,18 @@ def test_engine_generates_and_refines_plan_with_latest_plan_in_context(test_sett
     assert first_turn.assistant_turn.kind == "follow_up_questions"
     session_id = first_turn.session.session_id
 
-    second_turn = engine.advance_session(session_id, "The audience is the operations leadership team.")
+    second_turn = engine.advance_session(
+        session_id,
+        "The audience is the operations leadership team.",
+    )
     assert second_turn.assistant_turn.kind == "plan"
     assert second_turn.session.current_plan_markdown.startswith("## Goal")
     assert llm_client.plan_prompts[0].path.name == "plan-generation.md"
 
-    third_turn = engine.advance_session(session_id, "Refine it for executive review and add approval criteria.")
+    third_turn = engine.advance_session(
+        session_id,
+        "Refine it for executive review and add approval criteria.",
+    )
     assert third_turn.assistant_turn.kind == "plan"
     assert third_turn.session.current_plan_markdown.startswith("## Goal\n\nCreate a revised plan")
     assert len(third_turn.session.plan_versions) == 2

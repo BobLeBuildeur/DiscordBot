@@ -5,7 +5,12 @@ import re
 from typing import Any, Protocol
 
 from backend.config import Settings
-from backend.orchestrator.models import GeneratedResponse, NextAction, PromptResponseMetadata, StateCheck
+from backend.orchestrator.models import (
+    GeneratedResponse,
+    NextAction,
+    PromptResponseMetadata,
+    StateCheck,
+)
 from backend.orchestrator.prompts import BuiltPrompt
 
 try:
@@ -27,7 +32,9 @@ class LLMClient(Protocol):
 class OpenAIOrchestratorClient:
     def __init__(self, settings: Settings) -> None:
         self.settings = settings
-        self._client = OpenAI(api_key=settings.openai_api_key) if OpenAI and settings.openai_api_key else None
+        self._client = (
+            OpenAI(api_key=settings.openai_api_key) if OpenAI and settings.openai_api_key else None
+        )
 
     def run_state_check(self, prompt: BuiltPrompt) -> StateCheck:
         payload = self._run_json_prompt(prompt, self.settings.openai_state_check_model)
