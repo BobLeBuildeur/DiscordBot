@@ -22,17 +22,20 @@ The system follows a small conversational loop for back-office planning tasks.
 2. Clarify
    - The system calls OpenAI to perform a state check after each user input.
    - That state check decides whether more information is required or whether the system should create or refine a plan.
-   - If more information is needed, the system asks follow-up questions and waits for the customer to reply.
+   - The state check also returns a confidence value.
+   - If more information is needed, or if confidence is below a configurable threshold, the system asks follow-up questions and waits for the customer to reply.
 
 3. Plan
    - Once the system has enough information, it generates a markdown plan.
    - The plan should follow the structure described in `.cursor/rules/feature-planning.mdc`.
    - The latest plan must remain part of the orchestration context for later turns.
+   - The plan-generation prompt should come from a markdown prompt document stored in the repository.
 
 4. Refine
    - The customer responds with comments or requested changes to the plan.
    - The system runs the same state check again:
      - ask more follow-up questions if context is still missing, or
+     - ask more follow-up questions if confidence is too low, or
      - refine the markdown plan directly if enough context is available
    - This loop repeats until the customer is satisfied with the plan.
 
@@ -66,7 +69,10 @@ flowchart TD
 
 - Build a small orchestration workflow that starts from a customer problem statement and decides after each step whether more information is needed or whether a plan should be created or refined.
 - Use OpenAI as the LLM provider for state checks, follow-up questions, plan generation, and plan refinement.
+- Store the system prompts as markdown documents in the repository and load the correct prompt based on orchestration state.
 - Generate the plan in markdown using the structure described in the Cursor feature-planning rule.
+- Return a confidence level from the LLM on every step, not only during state checks.
+- If the returned confidence is below a configurable threshold, ask the analyst more follow-up questions before creating or refining the plan.
 - Support customer feedback on the plan through natural-language comments rather than a heavy review workflow.
 - Keep the latest markdown plan in the orchestration context for every later refinement step.
 - Serialize every orchestration step and saved state to disk so sessions can be inspected after the fact.
@@ -83,11 +89,12 @@ flowchart TD
    1. Define the saved session state, including the current plan and post-step state check.
    2. Persist each turn and each orchestration step to disk for inspection.
 2. Clarification loop
-   1. Add the OpenAI-backed state check that decides whether follow-up questions are required.
-   2. Stream follow-up questions back to the customer when the system needs more information.
+   1. Add the OpenAI-backed state check that decides whether follow-up questions are required and returns a confidence level.
+   2. Stream follow-up questions back to the customer when the system needs more information or confidence is below threshold.
 3. Plan generation and refinement
-   1. Generate the initial markdown plan once enough information is available.
+   1. Generate the initial markdown plan once enough information is available and confidence is high enough.
    2. Reuse the same loop to refine the plan from customer comments.
+   3. Load different markdown prompt documents for problem understanding, plan generation, and plan refinement.
 4. Streaming API and thin client integration
    1. Add the POST endpoints needed to start a session and continue it.
    2. Stream chat responses and markdown plans to the client.
