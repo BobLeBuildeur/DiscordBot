@@ -12,7 +12,7 @@ Ship the smallest possible analyst-facing UI that proves the orchestration flow 
 
 - **Monorepo:** A new self-contained service lives under **`services/orchestration-web/`** (name may be adjusted, but the UI remains a sibling service to `services/orchestration-server/`, not embedded inside it).
 - **Orchestration server** is running and reachable from the browser for the PoC (base URL via public env, e.g. `PUBLIC_ORCHESTRATION_API_URL`), with **CORS** allowed for the web app origin when dev/proxy differs.
-- **API contract:** The UI uses the orchestration HTTP API only—**`POST /orchestrator/sessions`** to start a session with the initial problem, and **`POST /orchestrator/sessions/{session_id}/messages`** for follow-ups. **`GET /orchestrator/sessions/{session_id}`** exists on the server but **must not** be used in this PoC to load prior transcript (see out of scope below).
+- **API contract:** The UI uses the orchestration HTTP API: **`POST /orchestrator/sessions`** to start a session with the initial problem; **`POST /orchestrator/sessions/{session_id}/messages`** for follow-ups; and **`GET /orchestrator/sessions/{session_id}`** to load the session when the session page is opened (cold load or refresh), populating the chat from the response’s **`conversation_history`** (using **role** and **content**).
 - **Agent payloads:** Server responses that appear in the history (the **agent** role) are **Markdown**. The client still applies the agreed strategy to extract embedded JSON (e.g. `session_id`) from the first response when needed; the string shown as the agent message body is then rendered as **HTML** inside **`HistoryItem`** (see implementation steps).
 - The first response shape is understood well enough to parse embedded JSON from the response text and read `session_id` so the client can navigate to the session URL and transition to “session active.”
 - **Tooling:** Node.js version compatible with the chosen SvelteKit release; `npm`/`pnpm`/`bun` per service lockfile once the app is scaffolded.
@@ -46,7 +46,7 @@ Ship the smallest possible analyst-facing UI that proves the orchestration flow 
 |--------|------|--------|
 | Start session + initial problem | `POST {base}/orchestrator/sessions` | Body matches server contract; response body includes **Markdown** for display; response text parsed for JSON / `session_id` per agreed rules. |
 | Send follow-up | `POST {base}/orchestrator/sessions/{session_id}/messages` | Same: agent-visible content is **Markdown** rendered to HTML in **`HistoryItem`**. |
-| Load existing transcript | `GET …/sessions/{session_id}` | **Out of scope** for this PoC—do not implement hydration from this endpoint. |
+| Load existing transcript | `GET …/sessions/{session_id}` | Called when the session route is loaded (cold load or refresh). Response **`conversation_history`** is mapped to chat: **role** (`user` → analyst, `assistant` → agent) and **content** → message body; history is populated before the user interacts. |
 
 - **Base URL** is configured for the browser (e.g. SvelteKit `PUBLIC_ORCHESTRATION_API_URL`). Local dev may use a Vite proxy to the orchestration server to simplify CORS during development; that is an implementation detail inside the web service.
 
@@ -54,8 +54,8 @@ Ship the smallest possible analyst-facing UI that proves the orchestration flow 
 
 - **Pre-session:** A route **without** a session id in the path (e.g. **`/`**) shows empty history and the input; the analyst is **ready to start a new session**.
 - **After a successful start-session response** and once `session_id` is known: the app **navigates** (e.g. `goto`) to a route that **includes the session id in the path**, such as **`/session/[sessionId]`** (exact path convention is an implementation choice as long as the id is a path segment, not a secret query hack).
-- **Follow-up messages** use the **`sessionId` from `$page.params`** (and the same value for API calls) so the URL reflects the active session and can be bookmarked—even though **restoring chat content from the server is out of scope**.
-- **Cold load** of `/session/[sessionId]` (e.g. refresh or pasted link): the PoC **does not** fetch historical messages; the history may start empty while the id in the URL still identifies the session for **new** `POST …/messages` calls. (Document this limitation in the service README if it confuses testers.)
+- **Follow-up messages** use the **`sessionId` from `$page.params`** (and the same value for API calls) so the URL reflects the active session and can be bookmarked.
+- **Cold load** of `/session/[sessionId]` (e.g. refresh or pasted link): the app **calls `GET /orchestrator/sessions/{session_id}`** and **populates the chat** from the response’s **`conversation_history`** (mapping **role** and **content** to the History/HistoryItem model). Until the response arrives, the history may show a loading state or remain empty; once loaded, the Analyst sees the full transcript and can continue the conversation.
 
 ### Stack constraints
 
@@ -136,6 +136,14 @@ Every **named UI building block** in [Interface composition](#interface-composit
 **Then** the response Markdown is appended at the **bottom** of the history as a **history item** with role **agent**, **rendered as HTML** in that item  
 **And** the page **scrolls to the bottom**.
 
+### Cold load / refresh — session transcript restored
+
+**Given** the Analyst opens or refreshes **`/session/[sessionId]`** (e.g. bookmark or paste link)  
+**When** the session page loads with a valid **session_id**  
+**Then** the app **calls `GET /orchestrator/sessions/{session_id}`**  
+**And** the response **`conversation_history`** is mapped to the chat (API **role** `user` → **analyst**, `assistant` → **agent**; **content** → message **body**)  
+**And** the **History** shows the full transcript and the Analyst can send follow-up messages.
+
 ---
 
 ## Interface composition (non-functional)
@@ -155,8 +163,7 @@ Every **named UI building block** in [Interface composition](#interface-composit
 1. **Scaffold service:** Create **`services/orchestration-web/`** with SvelteKit, Svelte 5, and runes enabled per project template. Add public env for orchestration base URL and document dev proxy/CORS if used.  
    *Won’t do:* place the app under `services/orchestration-server/` or scatter UI files at repo root.
 
-2. **Routes:** Implement **`/`** (or equivalent) for “no session id yet” and **`/session/[sessionId]`** (or equivalent) for the active session; share the same **History**, **HistoryItem**, and **MessageInput** components on both if the layout is identical, or keep composition DRY via a small layout wrapper component.  
-   *Won’t do:* hydrate transcript from **`GET /orchestrator/sessions/{session_id}`**.
+2. **Routes:** Implement **`/`** (or equivalent) for “no session id yet” and **`/session/[sessionId]`** (or equivalent) for the active session; share the same **History**, **HistoryItem**, and **MessageInput** components on both if the layout is identical, or keep composition DRY via a small layout wrapper component. On load of the session route, **call `GET /orchestrator/sessions/{session_id}`** and **populate the chat** from **`conversation_history`** (map **role** and **content** to the UI message list).
 
 3. **Shell layout:** Compose **History** + **MessageInput** in `+page.svelte` (and session page) with default block layout and a scrollable history region.  
    *Won’t do:* complex grid/flex unless needed for scroll containment.
@@ -185,11 +192,11 @@ Every **named UI building block** in [Interface composition](#interface-composit
 
 - **Monorepo boundary:** UI code and dependencies live under **`services/orchestration-web/`**; call **`services/orchestration-server/`** only via HTTP.
 - **Size:** Few files, minimal dependencies; every addition must trace to a stated BDD or NFR; **no design-system or E2E** dependencies.
-- **Contract:** Document `PUBLIC_ORCHESTRATION_API_URL`, `POST /orchestrator/sessions`, and `POST /orchestrator/sessions/{id}/messages` in the web service README; keep request/response shapes aligned with server tests.
+- **Contract:** Document `PUBLIC_ORCHESTRATION_API_URL`, `POST /orchestrator/sessions`, `POST /orchestrator/sessions/{id}/messages`, and `GET /orchestrator/sessions/{id}` (for session load) in the web service README; keep request/response shapes aligned with server tests.
 - **Parsing:** Define one clear strategy for “JSON in text” (e.g. fenced block, last JSON object, regex)—same behavior on success and clear error on failure. After extraction, the **display string** passed to **`HistoryItem`** for the agent should still be valid **Markdown** (e.g. strip only the JSON block if the contract calls for separation).
 - **Markdown safety:** Never inject unsanitized HTML from the server; **sanitize** after Markdown compilation and before `{@html}`.
 - **URL:** After session start, **session id must appear in the path**; do not rely on hidden global state alone for the active id.
-- **Out of scope reminder:** No **GET**-based **chat restore**, no **design system**, no **E2E testing framework**.
+- **Session restore:** **GET /orchestrator/sessions/{session_id}** is used to load and display **conversation_history** when the session route is loaded; map **role** and **content** to the existing History/HistoryItem model. **Out of scope:** design system, E2E testing framework.
 - **Accessibility (light touch):** Use labels associated with the textarea and a sensible button name so default focus/tab order remains usable.
 - **Done means:** All Gherkin scenarios are demonstrable in the browser with Svelte components as specified, default-plus-minimal styling, **`agent` vs `analyst`** history items, **agent Markdown rendered as sanitized HTML in `HistoryItem`**, and URL updating after the first response.
 
@@ -208,6 +215,6 @@ Every **named UI building block** in [Interface composition](#interface-composit
 | Agent vs analyst styling | **HistoryItem** `role` prop + minimal CSS |
 | Agent Markdown → HTML | **HistoryItem**: markdown lib + sanitize + `{@html}` |
 | Analyst plain text | **HistoryItem**: text/escaped content, no Markdown |
-| No transcript restore | Do not call `GET /orchestrator/sessions/{id}` for history |
+| Session load / transcript restore | On session route load: call `GET /orchestrator/sessions/{id}`; map `conversation_history` (role, content) to **History** / **HistoryItem** |
 
 This plan is intentionally narrow so implementation can stay small while still validating the concept with a realistic Analyst session, a dedicated **orchestration-web** service, and **SvelteKit + runes** aligned to the existing orchestration HTTP API.
