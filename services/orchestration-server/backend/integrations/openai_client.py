@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import re
+from collections.abc import Iterator
 from typing import Any, Protocol
 
 from backend.config import Settings
@@ -22,11 +23,13 @@ except ImportError:  # pragma: no cover - exercised only when dependency is abse
 class LLMClient(Protocol):
     def run_state_check(self, prompt: BuiltPrompt) -> StateCheck: ...
 
-    def generate_follow_up_questions(self, prompt: BuiltPrompt) -> GeneratedResponse: ...
+    def generate_follow_up_questions_stream(self, prompt: BuiltPrompt) -> Iterator[str]: ...
 
-    def generate_plan(self, prompt: BuiltPrompt) -> GeneratedResponse: ...
+    def generate_plan_stream(self, prompt: BuiltPrompt) -> Iterator[str]: ...
 
-    def refine_plan(self, prompt: BuiltPrompt) -> GeneratedResponse: ...
+    def refine_plan_stream(self, prompt: BuiltPrompt) -> Iterator[str]: ...
+
+    def finalize_generation(self, accumulated: str, prompt: BuiltPrompt) -> GeneratedResponse: ...
 
 
 class OpenAIOrchestratorClient:
@@ -41,18 +44,17 @@ class OpenAIOrchestratorClient:
         payload["confidence_threshold"] = self.settings.llm_confidence_threshold
         return StateCheck.model_validate(payload)
 
-    def generate_follow_up_questions(self, prompt: BuiltPrompt) -> GeneratedResponse:
-        return self._run_generation_prompt(prompt)
+    def generate_follow_up_questions_stream(self, prompt: BuiltPrompt) -> Iterator[str]:
+        yield from self._stream_text_prompt(prompt, self.settings.openai_generation_model)
 
-    def generate_plan(self, prompt: BuiltPrompt) -> GeneratedResponse:
-        return self._run_generation_prompt(prompt)
+    def generate_plan_stream(self, prompt: BuiltPrompt) -> Iterator[str]:
+        yield from self._stream_text_prompt(prompt, self.settings.openai_generation_model)
 
-    def refine_plan(self, prompt: BuiltPrompt) -> GeneratedResponse:
-        return self._run_generation_prompt(prompt)
+    def refine_plan_stream(self, prompt: BuiltPrompt) -> Iterator[str]:
+        yield from self._stream_text_prompt(prompt, self.settings.openai_generation_model)
 
-    def _run_generation_prompt(self, prompt: BuiltPrompt) -> GeneratedResponse:
-        text = self._run_text_prompt(prompt, self.settings.openai_generation_model)
-        content, raw_metadata = _split_markdown_and_metadata(text)
+    def finalize_generation(self, accumulated: str, prompt: BuiltPrompt) -> GeneratedResponse:
+        content, raw_metadata = _split_markdown_and_metadata(accumulated)
         metadata = PromptResponseMetadata(
             prompt_name=prompt.name,
             prompt_path=str(prompt.path),
@@ -78,18 +80,23 @@ class OpenAIOrchestratorClient:
         content = response.choices[0].message.content or "{}"
         return json.loads(content)
 
-    def _run_text_prompt(self, prompt: BuiltPrompt, model: str) -> str:
+    def _stream_text_prompt(self, prompt: BuiltPrompt, model: str) -> Iterator[str]:
         if not self._client:
             raise RuntimeError("OPENAI_API_KEY is required to call the OpenAI-backed orchestrator.")
 
-        response = self._client.chat.completions.create(
+        stream = self._client.chat.completions.create(
             model=model,
             messages=[
                 {"role": "system", "content": prompt.system_prompt},
                 {"role": "user", "content": prompt.user_prompt},
             ],
+            stream=True,
         )
-        return response.choices[0].message.content or ""
+        for chunk in stream:
+            choice = chunk.choices[0]
+            delta = choice.delta.content if choice.delta else None
+            if delta:
+                yield delta
 
 
 def _split_markdown_and_metadata(text: str) -> tuple[str, dict[str, Any]]:
