@@ -111,6 +111,7 @@ def test_api_streams_session_and_persists_final_state(test_settings):
     session_id = first_events["session"][0]["session_id"]
     assert first_events["chunk"][0]["content"].startswith("Please share")
     assert first_events["final"][0]["state_check"]["next_action"] == "ask_follow_up"
+    assert llm_client.metadata_prompts[0].path.name == "response-metadata.md"
 
     with client.stream(
         "POST",
@@ -125,6 +126,7 @@ def test_api_streams_session_and_persists_final_state(test_settings):
     second_events = _parse_sse(second_stream)
     assert second_events["final"][0]["assistant_kind"] == "plan"
     assert second_events["final"][0]["current_plan_markdown"].startswith("## Goal")
+    assert llm_client.metadata_prompts[1].path.name == "response-metadata.md"
 
     session_response = client.get(f"/orchestrator/sessions/{session_id}")
     assert session_response.status_code == 200

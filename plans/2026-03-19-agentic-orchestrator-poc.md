@@ -423,3 +423,34 @@ sequenceDiagram
   Orchestrator->>Orchestrator: split markdown and metadata, save session
   Orchestrator->>Client: SSE final
 ```
+
+---
+
+## Addendum — Split streamed answer and hidden JSON metadata (2026-03-21)
+
+After response streaming landed, the assistant generation path still appended a **trailing fenced JSON metadata block** to the same streamed string. Until that block finished, the UI could show **partial JSON** (and text adjacent to it), which was poor UX.
+
+**Change:** generation is now **two LLM calls per turn**:
+
+1. **Call 1 (streamed):** User-facing markdown only. The follow-up, plan-generation, and plan-refinement prompts instruct the model **not** to output JSON or metadata fences. Tokens are forwarded to the client as SSE **`chunk`** events as before.
+2. **Call 2 (hidden, non-streamed):** A separate prompt (`response-metadata.md`) receives session context plus the full markdown from call 1 and returns **JSON only** (`response_format: json_object`), shaped as `PromptResponseMetadata` (`confidence`, `next_action`, `missing_information`). The OpenAI client builds metadata from this response; failures fall back to safe defaults and are logged. A **`response-metadata`** step artifact records the parsed metadata for inspectability.
+
+The **HTTP/SSE contract is unchanged:** `final` still includes `assistant_message` (clean markdown) and `response_metadata`. No frontend change was required for this split.
+
+### Sequence diagram (two-call generation)
+
+```mermaid
+sequenceDiagram
+  participant Engine
+  participant LLM1
+  participant LLM2
+  participant UI
+  Engine->>LLM1: stream generation prompt
+  loop deltas
+    LLM1-->>Engine: markdown token
+    Engine-->>UI: SSE chunk
+  end
+  Engine->>LLM2: metadata prompt plus full markdown answer
+  LLM2-->>Engine: JSON object only
+  Engine-->>UI: SSE final with clean assistant_message and response_metadata
+```

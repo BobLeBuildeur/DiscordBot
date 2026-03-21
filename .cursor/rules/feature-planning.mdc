@@ -78,6 +78,17 @@ Each sequential action that will be taken to achieve the goal:
 
 ---
 
+### TODOs and codebase markers
+
+When creating an implementation plan, **check for existing TODO-style debt** in the areas you intend to change:
+
+- Search relevant paths for `TODO`, `FIXME`, `XXX`, and `HACK` comments tied to the same feature, subsystem, or failure mode; fold them into **Steps**, **Guardrails**, or an explicit **Follow-ups / deferred work** note so they are not ignored when the plan is executed.
+- If the plan intentionally defers work (including observability, migrations, or cleanup), say so in the plan rather than leaving only a code comment or implicit debt.
+
+**Won't do:** Ignoring nearby TODOs that the new work will touch; adding a vague "address tech debt" step without naming the marker or file.
+
+---
+
 ### Guardrails
 
 A list of constraints and checks to validate the solution:

@@ -47,6 +47,33 @@ class PromptManager:
     ) -> BuiltPrompt:
         return self._build("plan-refinement.md", session, latest_message, "Plan Refinement")
 
+    def build_response_metadata_prompt(
+        self,
+        session: SessionState,
+        latest_user_message: str,
+        assistant_markdown: str,
+        assistant_kind: str,
+    ) -> BuiltPrompt:
+        path = self.prompt_root / "response-metadata.md"
+        system_prompt = path.read_text(encoding="utf-8")
+        user_prompt = "\n".join(
+            [
+                self._render_context(session, latest_user_message),
+                "",
+                "# Assistant message kind",
+                assistant_kind,
+                "",
+                "# Assistant markdown answer",
+                assistant_markdown,
+            ]
+        )
+        return BuiltPrompt(
+            name="Response Metadata",
+            path=path,
+            system_prompt=system_prompt,
+            user_prompt=user_prompt,
+        )
+
     def _build(
         self,
         filename: str,

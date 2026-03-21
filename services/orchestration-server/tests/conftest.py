@@ -5,7 +5,7 @@ from collections.abc import Iterable, Iterator
 import pytest
 
 from backend.config import SERVICE_ROOT, Settings
-from backend.orchestrator.models import GeneratedResponse, StateCheck
+from backend.orchestrator.models import GeneratedResponse, PromptResponseMetadata, StateCheck
 from backend.orchestrator.prompts import BuiltPrompt
 
 
@@ -28,7 +28,9 @@ class FakeLLMClient:
         self.follow_up_prompts = []
         self.plan_prompts = []
         self.refinement_prompts = []
+        self.metadata_prompts: list[BuiltPrompt] = []
         self._stream_pending: GeneratedResponse | None = None
+        self._stream_accumulated = ""
 
     def run_state_check(self, prompt):
         self.state_check_prompts.append(prompt)
@@ -42,26 +44,44 @@ class FakeLLMClient:
     def generate_follow_up_questions_stream(self, prompt) -> Iterator[str]:
         self.follow_up_prompts.append(prompt)
         self._stream_pending = self.follow_up_responses.pop(0)
-        yield from self._yield_content_chunks(self._stream_pending.content)
+        self._stream_accumulated = ""
+        for chunk in self._yield_content_chunks(self._stream_pending.content):
+            self._stream_accumulated += chunk
+            yield chunk
 
     def generate_plan_stream(self, prompt) -> Iterator[str]:
         self.plan_prompts.append(prompt)
         self._stream_pending = self.plan_responses.pop(0)
-        yield from self._yield_content_chunks(self._stream_pending.content)
+        self._stream_accumulated = ""
+        for chunk in self._yield_content_chunks(self._stream_pending.content):
+            self._stream_accumulated += chunk
+            yield chunk
 
     def refine_plan_stream(self, prompt) -> Iterator[str]:
         self.refinement_prompts.append(prompt)
         self._stream_pending = self.refinement_responses.pop(0)
-        yield from self._yield_content_chunks(self._stream_pending.content)
+        self._stream_accumulated = ""
+        for chunk in self._yield_content_chunks(self._stream_pending.content):
+            self._stream_accumulated += chunk
+            yield chunk
 
-    def finalize_generation(self, accumulated: str, prompt: BuiltPrompt) -> GeneratedResponse:
+    def extract_generation_metadata(
+        self, metadata_prompt: BuiltPrompt, generation_prompt: BuiltPrompt
+    ) -> PromptResponseMetadata:
         pending = self._stream_pending
         self._stream_pending = None
         if pending is None:
-            raise RuntimeError("finalize_generation called without a preceding stream")
-        if accumulated != pending.content:
+            raise RuntimeError("extract_generation_metadata called without a preceding stream")
+        if self._stream_accumulated != pending.content:
             raise AssertionError("Streamed text does not match pending generated response")
-        return pending
+        self._stream_accumulated = ""
+        self.metadata_prompts.append(metadata_prompt)
+        return pending.metadata.model_copy(
+            update={
+                "prompt_name": generation_prompt.name,
+                "prompt_path": str(generation_prompt.path),
+            }
+        )
 
 
 @pytest.fixture

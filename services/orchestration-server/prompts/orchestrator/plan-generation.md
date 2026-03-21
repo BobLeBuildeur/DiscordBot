@@ -29,17 +29,7 @@ The content should match the format expectations described in `.cursor/rules/fea
 
 ## Output Format
 
-Return the full plan in markdown followed by a JSON metadata block.
-
-Metadata block:
-
-```json
-{
-  "confidence": 0.86,
-  "next_action": "wait_for_user",
-  "missing_information": []
-}
-```
+Return the **full plan in markdown only**. Do **not** append JSON, metadata, or any fenced code block for machine-readable data.
 
 ## Style Rules
 

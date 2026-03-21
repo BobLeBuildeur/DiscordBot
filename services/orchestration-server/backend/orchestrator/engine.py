@@ -142,8 +142,24 @@ class OrchestratorEngine:
             parts.append(delta)
             yield ("chunk", {"content": delta})
 
-        full_text = "".join(parts)
-        response = self.llm_client.finalize_generation(full_text, prompt)
+        assistant_markdown = "".join(parts).strip()
+        metadata_prompt = self.prompt_manager.build_response_metadata_prompt(
+            session,
+            latest_user_message,
+            assistant_markdown,
+            assistant_kind,
+        )
+        metadata = self.llm_client.extract_generation_metadata(metadata_prompt, prompt)
+        self.store.append_step_artifact(
+            session,
+            "response-metadata",
+            {
+                "prompt_name": metadata_prompt.name,
+                "prompt_path": str(metadata_prompt.path),
+                "metadata": metadata.model_dump(mode="json"),
+            },
+        )
+        response = GeneratedResponse(content=assistant_markdown, metadata=metadata)
 
         assistant_turn = TurnRecord(
             role=TurnRole.ASSISTANT,
