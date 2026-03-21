@@ -26,26 +26,12 @@ Do not generate a full plan in this step.
 
 ## Output Format
 
-Return markdown for the analyst followed by a JSON metadata block.
+Return **markdown only** for the analyst. Do **not** append JSON, metadata, or any fenced code block for machine-readable data.
 
-Markdown section:
+The markdown should:
 
 - briefly summarize your current understanding
 - ask the smallest useful set of follow-up questions
-
-Metadata block:
-
-```json
-{
-  "confidence": 0.58,
-  "next_action": "ask_follow_up",
-  "missing_information": [
-    "target audience",
-    "expected deliverable",
-    "decision criteria"
-  ]
-}
-```
 
 ## Style Rules
 

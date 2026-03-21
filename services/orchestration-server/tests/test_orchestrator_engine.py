@@ -69,6 +69,7 @@ def test_engine_asks_follow_up_when_confidence_is_below_threshold(test_settings)
     assert result.assistant_turn.kind == "follow_up_questions"
     assert "below the configured threshold" in result.state_check.reason
     assert llm_client.follow_up_prompts[0].path.name == "problem-understanding.md"
+    assert llm_client.metadata_prompts[0].path.name == "response-metadata.md"
     assert not llm_client.plan_prompts
 
 
@@ -137,6 +138,7 @@ def test_engine_generates_and_refines_plan_with_latest_plan_in_context(test_sett
 
     first_turn = engine.start_session("Build a planning workflow.")
     assert first_turn.assistant_turn.kind == "follow_up_questions"
+    assert llm_client.metadata_prompts[0].path.name == "response-metadata.md"
     session_id = first_turn.session.session_id
 
     second_turn = engine.advance_session(
@@ -146,6 +148,7 @@ def test_engine_generates_and_refines_plan_with_latest_plan_in_context(test_sett
     assert second_turn.assistant_turn.kind == "plan"
     assert second_turn.session.current_plan_markdown.startswith("## Goal")
     assert llm_client.plan_prompts[0].path.name == "plan-generation.md"
+    assert llm_client.metadata_prompts[1].path.name == "response-metadata.md"
 
     third_turn = engine.advance_session(
         session_id,
@@ -156,3 +159,4 @@ def test_engine_generates_and_refines_plan_with_latest_plan_in_context(test_sett
     assert len(third_turn.session.plan_versions) == 2
     assert llm_client.refinement_prompts[0].path.name == "plan-refinement.md"
     assert "Create the first plan." in llm_client.refinement_prompts[0].user_prompt
+    assert llm_client.metadata_prompts[2].path.name == "response-metadata.md"

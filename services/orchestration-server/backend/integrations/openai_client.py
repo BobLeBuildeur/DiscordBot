@@ -1,23 +1,22 @@
 from __future__ import annotations
 
 import json
-import re
+import logging
 from collections.abc import Iterator
 from typing import Any, Protocol
 
+from pydantic import ValidationError
+
 from backend.config import Settings
-from backend.orchestrator.models import (
-    GeneratedResponse,
-    NextAction,
-    PromptResponseMetadata,
-    StateCheck,
-)
+from backend.orchestrator.models import NextAction, PromptResponseMetadata, StateCheck
 from backend.orchestrator.prompts import BuiltPrompt
 
 try:
     from openai import OpenAI
 except ImportError:  # pragma: no cover - exercised only when dependency is absent
     OpenAI = None
+
+logger = logging.getLogger(__name__)
 
 
 class LLMClient(Protocol):
@@ -29,7 +28,9 @@ class LLMClient(Protocol):
 
     def refine_plan_stream(self, prompt: BuiltPrompt) -> Iterator[str]: ...
 
-    def finalize_generation(self, accumulated: str, prompt: BuiltPrompt) -> GeneratedResponse: ...
+    def extract_generation_metadata(
+        self, metadata_prompt: BuiltPrompt, generation_prompt: BuiltPrompt
+    ) -> PromptResponseMetadata: ...
 
 
 class OpenAIOrchestratorClient:
@@ -53,17 +54,33 @@ class OpenAIOrchestratorClient:
     def refine_plan_stream(self, prompt: BuiltPrompt) -> Iterator[str]:
         yield from self._stream_text_prompt(prompt, self.settings.openai_generation_model)
 
-    def finalize_generation(self, accumulated: str, prompt: BuiltPrompt) -> GeneratedResponse:
-        content, raw_metadata = _split_markdown_and_metadata(accumulated)
-        metadata = PromptResponseMetadata(
-            prompt_name=prompt.name,
-            prompt_path=str(prompt.path),
-            confidence=float(raw_metadata.get("confidence", 0.0)),
-            next_action=NextAction(raw_metadata.get("next_action", NextAction.WAIT_FOR_USER.value)),
-            missing_information=list(raw_metadata.get("missing_information", [])),
-            raw_metadata=raw_metadata,
-        )
-        return GeneratedResponse(content=content, metadata=metadata)
+    def extract_generation_metadata(
+        self, metadata_prompt: BuiltPrompt, generation_prompt: BuiltPrompt
+    ) -> PromptResponseMetadata:
+        # Small JSON task; same model as state check unless we add a dedicated setting later.
+        try:
+            raw = self._run_json_prompt(metadata_prompt, self.settings.openai_state_check_model)
+            return PromptResponseMetadata(
+                prompt_name=generation_prompt.name,
+                prompt_path=str(generation_prompt.path),
+                confidence=float(raw.get("confidence", 0.0)),
+                next_action=NextAction(raw.get("next_action", NextAction.WAIT_FOR_USER.value)),
+                missing_information=list(raw.get("missing_information", [])),
+                raw_metadata=raw,
+            )
+        except (json.JSONDecodeError, ValidationError, ValueError, TypeError) as exc:
+            # TODO(observability): Treat metadata extraction failures as a first-class signal:
+            # emit metrics, a trace span, or structured events (e.g. metadata_extraction_failed)
+            # so operators can detect this path without relying on generic error logs alone.
+            logger.warning("Response metadata extraction failed: %s", exc, exc_info=True)
+            return PromptResponseMetadata(
+                prompt_name=generation_prompt.name,
+                prompt_path=str(generation_prompt.path),
+                confidence=0.0,
+                next_action=NextAction.WAIT_FOR_USER,
+                missing_information=["metadata extraction failed"],
+                raw_metadata={"error": str(exc)},
+            )
 
     def _run_json_prompt(self, prompt: BuiltPrompt, model: str) -> dict[str, Any]:
         if not self._client:
@@ -97,14 +114,3 @@ class OpenAIOrchestratorClient:
             delta = choice.delta.content if choice.delta else None
             if delta:
                 yield delta
-
-
-def _split_markdown_and_metadata(text: str) -> tuple[str, dict[str, Any]]:
-    matches = list(re.finditer(r"```json\s*(\{.*?\})\s*```", text, flags=re.DOTALL))
-    if not matches:
-        return text.strip(), {}
-
-    last_match = matches[-1]
-    markdown = text[: last_match.start()].strip()
-    metadata = json.loads(last_match.group(1))
-    return markdown, metadata
