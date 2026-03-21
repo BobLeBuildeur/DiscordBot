@@ -385,3 +385,41 @@ This keeps the loop adaptive without introducing hidden logic outside the saved 
   - `pillars/opinionated-simplicity-underrated.md`
   - `pillars/small-steps-toward-user-value.md`
   - `pillars/state-is-explicit-not-implicit.md`
+
+---
+
+## Addendum — OpenAI streaming and client SSE (2026-03-20)
+
+This section documents how assistant text reaches the analyst UI after the generation path was wired to **OpenAI Chat Completions streaming** and the orchestration HTTP API’s **Server-Sent Events (SSE)**.
+
+### End-to-end flow
+
+1. The client calls **`POST /orchestrator/sessions`** or **`POST /orchestrator/sessions/{session_id}/messages`**.
+2. The orchestration server runs the **state check** first: a **synchronous** OpenAI call with `response_format=json_object`, persists the structured `state_check` artifact, and decides which generation prompt to use (follow-up questions, plan creation, or plan refinement).
+3. The server emits an SSE **`session`** event (includes `session_id`) so the client can navigate or correlate the stream.
+4. For **assistant generation only**, the server calls OpenAI **`chat.completions.create(..., stream=True)`** and forwards each non-empty **content delta** to the client as an SSE **`chunk`** event with body `{"content": "<delta>"}`.
+5. When the OpenAI stream finishes, the server **concatenates** the full assistant string, runs the same **markdown + trailing fenced JSON metadata** parsing as before, persists the assistant turn (and plan artifacts when applicable), then emits a single SSE **`final`** event with the same payload shape as the non-streaming design (`session_id`, `assistant_message`, `state_check`, `response_metadata`, `current_plan_markdown`, etc.).
+
+**Not streamed:** the state-check JSON call remains blocking; only the **generation** step uses token/delta streaming. **Unchanged:** public SSE event names (`session`, `chunk`, `final`) and the meaning of the `final` payload for clients.
+
+**Fake / test client:** tests use a fake LLM that yields the canned assistant text in small slices so the API still produces multiple **`chunk`** events without calling OpenAI.
+
+### Sequence diagram
+
+```mermaid
+sequenceDiagram
+  participant Client
+  participant Orchestrator
+  participant OpenAI
+  Client->>Orchestrator: POST sessions or messages
+  Orchestrator->>OpenAI: state check (sync JSON)
+  OpenAI-->>Orchestrator: StateCheck
+  Orchestrator->>Client: SSE session
+  Orchestrator->>OpenAI: chat.completions stream (generation)
+  loop Each delta
+    OpenAI-->>Orchestrator: content delta
+    Orchestrator->>Client: SSE chunk
+  end
+  Orchestrator->>Orchestrator: split markdown and metadata, save session
+  Orchestrator->>Client: SSE final
+```

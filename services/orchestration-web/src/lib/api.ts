@@ -1,5 +1,5 @@
 import { PUBLIC_ORCHESTRATION_API_URL } from '$env/static/public';
-import type { SessionEvent, ChunkEvent, FinalEvent } from './types.js';
+import type { Message, SessionEvent, ChunkEvent, FinalEvent } from './types.js';
 
 const BASE = PUBLIC_ORCHESTRATION_API_URL ?? '';
 
@@ -96,4 +96,39 @@ export async function sendMessage(
 	callbacks: SSECallbacks
 ): Promise<void> {
 	await streamSSE(`${BASE}/orchestrator/sessions/${sessionId}/messages`, { message }, callbacks);
+}
+
+/** Map GET session wire format (user/assistant + content) to UI `Message` (analyst/agent + body). */
+function conversationHistoryToMessages(
+	history: Array<{ role: string; content: string }>
+): Message[] {
+	const out: Message[] = [];
+	for (const turn of history) {
+		if (turn.role === 'user') {
+			out.push({ role: 'analyst', body: turn.content });
+		} else if (turn.role === 'assistant') {
+			out.push({ role: 'agent', body: turn.content });
+		}
+	}
+	return out;
+}
+
+export async function getSession(sessionId: string): Promise<Message[]> {
+	const response = await fetch(`${BASE}/orchestrator/sessions/${sessionId}`);
+	if (!response.ok) {
+		const text = await response.text();
+		throw new Error(`API error ${response.status}: ${text}`);
+	}
+	const data = (await response.json()) as { conversation_history?: unknown };
+	const raw = Array.isArray(data.conversation_history) ? data.conversation_history : [];
+	const turns = raw.filter(
+		(item): item is { role: string; content: string } =>
+			item !== null &&
+			typeof item === 'object' &&
+			'role' in item &&
+			'content' in item &&
+			typeof (item as { role: unknown }).role === 'string' &&
+			typeof (item as { content: unknown }).content === 'string'
+	);
+	return conversationHistoryToMessages(turns);
 }

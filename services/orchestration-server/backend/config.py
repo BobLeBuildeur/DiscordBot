@@ -21,6 +21,7 @@ class Settings(BaseSettings):
     prompt_root: Path = SERVICE_ROOT / "prompts" / "orchestrator"
     data_root: Path = SERVICE_ROOT / "data" / "orchestrator"
     stream_chunk_size: int = Field(default=160, ge=1)
+    cors_origins: str = "*"
 
 
 @lru_cache

@@ -2,12 +2,14 @@
 	import { page } from '$app/state';
 	import History from '$lib/components/History.svelte';
 	import MessageInput from '$lib/components/MessageInput.svelte';
-	import { sendMessage } from '$lib/api.js';
+	import { getSession, sendMessage } from '$lib/api.js';
 	import type { Message } from '$lib/types.js';
 
 	let sessionId = $derived(page.params.sessionId ?? '');
 
-	let messages: Message[] = $state(restoreMessages());
+	let messages: Message[] = $state([]);
+	let loading = $state(true);
+	let loadError = $state<string | null>(null);
 	let sending = $state(false);
 	let streamingBody = $state('');
 	let isStreaming = $state(false);
@@ -16,12 +18,37 @@
 		isStreaming ? [...messages, { role: 'agent', body: streamingBody }] : messages
 	);
 
-	function restoreMessages(): Message[] {
-		if (typeof window !== 'undefined' && window.history.state?.messages) {
-			return window.history.state.messages;
+	$effect(() => {
+		const id = sessionId;
+		if (!id) {
+			loading = false;
+			return;
 		}
-		return [];
-	}
+
+		let cancelled = false;
+
+		(async () => {
+			loading = true;
+			loadError = null;
+			messages = [];
+			try {
+				const loaded = await getSession(id);
+				if (cancelled) return;
+				messages = loaded;
+			} catch (err) {
+				if (cancelled) return;
+				messages = [];
+				loadError =
+					err instanceof Error ? err.message : 'Failed to load session';
+			} finally {
+				if (!cancelled) loading = false;
+			}
+		})();
+
+		return () => {
+			cancelled = true;
+		};
+	});
 
 	async function handleSend(text: string) {
 		sending = true;
@@ -65,8 +92,8 @@
 	<header class="session-header">
 		<span class="session-id">Session: {sessionId}</span>
 	</header>
-	<History messages={displayMessages} />
-	<MessageInput onSend={handleSend} disabled={sending} />
+	<History messages={displayMessages} {loading} {loadError} />
+	<MessageInput onSend={handleSend} disabled={sending || loading} />
 </div>
 
 <style>

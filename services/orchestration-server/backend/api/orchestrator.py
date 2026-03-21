@@ -7,7 +7,7 @@ from fastapi import APIRouter, Depends, Request
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
-from backend.orchestrator.engine import OrchestrationResult, OrchestratorEngine
+from backend.orchestrator.engine import OrchestratorEngine
 
 router = APIRouter(prefix="/orchestrator", tags=["orchestrator"])
 
@@ -28,11 +28,16 @@ def _sse_event(event: str, payload: dict[str, object]) -> str:
     return f"event: {event}\ndata: {json.dumps(payload)}\n\n"
 
 
-def _stream_result(result: OrchestrationResult) -> Iterator[str]:
-    yield _sse_event("session", {"session_id": result.session.session_id})
-    for chunk in result.iter_chunks():
-        yield _sse_event("chunk", {"content": chunk})
-    yield _sse_event("final", result.final_event_payload())
+def _sse_from_engine_stream(
+    stream: Iterator[tuple[str, dict[str, object]]],
+) -> Iterator[str]:
+    for kind, data in stream:
+        if kind == "session":
+            yield _sse_event("session", data)
+        elif kind == "chunk":
+            yield _sse_event("chunk", data)
+        elif kind == "final":
+            yield _sse_event("final", data)
 
 
 @router.post("/sessions")
@@ -40,8 +45,10 @@ def create_session(
     payload: CreateSessionRequest,
     engine: Annotated[OrchestratorEngine, Depends(get_engine)],
 ) -> StreamingResponse:
-    result = engine.start_session(payload.problem_statement)
-    return StreamingResponse(_stream_result(result), media_type="text/event-stream")
+    return StreamingResponse(
+        _sse_from_engine_stream(engine.start_session_streaming(payload.problem_statement)),
+        media_type="text/event-stream",
+    )
 
 
 @router.post("/sessions/{session_id}/messages")
@@ -50,8 +57,12 @@ def add_message(
     payload: SessionMessageRequest,
     engine: Annotated[OrchestratorEngine, Depends(get_engine)],
 ) -> StreamingResponse:
-    result = engine.advance_session(session_id, payload.message)
-    return StreamingResponse(_stream_result(result), media_type="text/event-stream")
+    return StreamingResponse(
+        _sse_from_engine_stream(
+            engine.advance_session_streaming(session_id, payload.message),
+        ),
+        media_type="text/event-stream",
+    )
 
 
 @router.get("/sessions/{session_id}")
