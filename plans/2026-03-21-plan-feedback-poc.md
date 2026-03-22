@@ -2,12 +2,12 @@
 
 ## Goal
 
-Deliver **Word-style inline plan feedback** in the orchestration web client so Analysts can select part of a generated plan, attach comments **anchored in the document flow** next to that selection, optionally add a global note in the message input, and send one message that produces a **new revised plan** as the next assistant turn. The experience must be polished enough for **customer demos**: full-width plan, obvious add-feedback affordance, and readable frozen history after send.
+Deliver **Word-style inline plan feedback** in the orchestration web client so Analysts can select part of a generated plan, attach comments in an **overlay anchored at the selection** (the **same logical position** as the floating **“+”** control), optionally add a global note in the message input, and send one message that produces a **new revised plan** as the next assistant turn. The experience must be polished enough for **customer demos**: full-width plan, obvious add-feedback affordance, and readable frozen history after send.
 
 **Success looks like:**
 
 - Assistant turns whose kind is `plan` render as a **dedicated plan history item** that uses the **full width** of the history container (no side column).
-- While that plan is the **active editable** draft (just streamed, not yet followed by a sent analyst message), the Analyst can select text, see a **“+”** control near the selection, add feedback that appears **anchored to that selection** via normal document layout (see Conceptual model). They edit in an **auto-growing textarea** while focused; when focus leaves and the comment has text, the block **collapses** to **only** the **“+”** symbol (no visible comment text in that state). **Empty** feedback is still removed on blur. While a feedback block is **active** or **reading**, the **quoted plan span** it refers to stays **visually highlighted**; in **inactive** state, that highlight is **off**.
+- While that plan is the **active editable** draft (just streamed, not yet followed by a sent analyst message), the Analyst can select text, see a **“+”** control near the selection, and add feedback that appears as a **floating panel at that same anchor** (absolute positioning inside the plan container—see [Overlay positioning](#overlay-positioning-feedback-at-selection)). They edit in an **auto-growing textarea** in **Editing** state; **blurring** does **not** leave **Editing** when the `**comment`** has non-whitespace text (see [Focus rule](#feedback-component-states)). **Empty** `**comment`** on blur still triggers **removal** of the feedback row. While a feedback block is **Editing** or **reading**, the **quoted plan span** it refers to stays **visually highlighted**.
 - After the Analyst sends the **next** message (with or without extra text in the main input), that plan item **freezes**: **native text selection** still works for copy/read, but **no new comments** can be added (no “+”, no new anchors). Inline feedback on frozen items appears in a **reading** state (non-editable).
 - The server receives **structured feedback** (each comment paired with the exact quoted plan substring) plus the **freeform message** and **current plan markdown**, calls the existing refinement path, and returns a **new** `plan` assistant turn; persistence replays correctly on session reload.
 
@@ -29,10 +29,23 @@ Deliver **Word-style inline plan feedback** in the orchestration web client so A
 - Existing **markdown rendering** (`renderMarkdown` / `HistoryItem.svelte` patterns).
 - **FastAPI** + **Pydantic** (`services/orchestration-server/backend/api/orchestrator.py`, `backend/orchestrator/models.py`) for request and session models.
 - **Prompt markdown** under `services/orchestration-server/prompts/orchestrator/` (`plan-refinement.md` and context assembly in `backend/orchestrator/prompts.py`).
-- `**pytest`** and `**ruff**` for server tests and lint.
-- Browser APIs: `Selection`, `Range`, and **minimal** positioning only where unavoidable (e.g. a floating “+” near the selection). Prefer **in-flow DOM** placement for comment UI so the engine handles layout. Optional: `element.focus()`, `requestAnimationFrame` for focus-after-render.
+- **pytest** and **ruff** for server tests and lint.
+- Browser APIs: `Selection`, `Range`, `getBoundingClientRect` for the floating **“+”** and for **overlay feedback panels** (same coordinate model relative to the plan root). `**tick`** + `**requestAnimationFrame**` to hydrate overlay positions after markdown paints. Optional: `element.focus()` for focus-after-render.
 
 ## Conceptual model
+
+### Target behavior (feedback row state)
+
+Each inline feedback row is either **Editing** or **reading**. **Editing** is entered only via **“+”** on an editable plan. **reading** may be entered from **initial hydrate** when the plan item is already frozen (no prior **Editing** in this session), or from **Editing** when the parent plan **becomes frozen** (e.g. after send). **Blur** with an empty **comment** removes an **Editing** row.
+
+```mermaid
+stateDiagram-v2
+  direction LR
+  [*] --> Editing: plusOnEditablePlan
+  [*] --> reading: frozenPlanLoadedOrHydrated
+  Editing --> reading: planBecomesFrozen
+  Editing --> [*]: blurAndCommentEmpty
+```
 
 ### History item type `plan`
 
@@ -41,16 +54,29 @@ The server already labels assistant plan outputs with `assistant_turn.kind == "p
 Each plan history item has:
 
 - **Full-width** rendered markdown (same sanitization pipeline as today).
-- **Comments anchored to selections** using **document flow**, not a parallel column: after the user confirms “+”, the comment block is inserted as a **sibling or adjacent in-flow node** tied to the selected range’s DOM context (e.g. immediately after the block element that contains the selection, or a small wrapper pattern that keeps layout linear). The browser’s normal block layout stacks plan text and comments—**no ongoing `top`/`left` sync**, no `ResizeObserver` loop for alignment.
+- **Comments as overlays at the selection:** after the user confirms **“+”**, the feedback UI is **not** a separate list below the plan; it is rendered **inside** the plan container with `**position: absolute`**, using the **same anchor coordinates** as the **“+”** (offset from the selection / range rect vs the plan root). The plan markdown itself stays a single column; only the **chrome** is floated.
 
-**Layout principle (PoC):** Prefer **native layout** (block flow, flex/grid only for trivial local grouping inside one item). Avoid per-frame or scroll-synced absolute positioning of comment panels.
+**Layout principle (PoC):** One `**position: relative`** plan root; overlays use **fixed math at create/hydrate time**—**no** `ResizeObserver` loop or scroll-synced repositioning. Multiple comments that share the same (or very close) anchor get a **vertical stack offset** so panels do not fully overlap (see [Overlay positioning](#overlay-positioning-feedback-at-selection)).
+
+### Overlay positioning (feedback at selection)
+
+
+| Topic                         | Rule                                                                                                                                                                                                                                                                                                                                                                               |
+| ----------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Anchor coordinates**        | Client-only `**anchor: { x, y }`** on each feedback row (relative to `.plan-body`, same convention as the **“+”**). **Do not** persist anchors on the server unless product explicitly wants cross-device layout stability.                                                                                                                                                        |
+| **On create**                 | When the analyst clicks **“+”** after a selection, set `**anchor`** from the same `**Range` / `getBoundingClientRect()**` math used to place the **“+”**.                                                                                                                                                                                                                          |
+| **After cold load / reading** | Server payloads omit `**anchor`**. After `highlightedHtml` paints, find `**<mark data-feedback-highlight="{id}">**` for that feedback id and compute `**anchor**` from the mark’s rect vs the plan root (`tick` + `requestAnimationFrame`). If no mark is found (edge case), fall back to a small **top-left inset** (e.g. `8, 8`) so the panel is still visible—document in code. |
+| **Stacking**                  | When two or more overlays fall in the same **grid bucket** (e.g. rounded coordinates), apply a **vertical step** (e.g. `top + index * step`) so stacked comments remain readable.                                                                                                                                                                                                  |
+| **Stacking order**            | Give overlays a **higher `z-index`** than plan body text; keep `**pointer-events**` usable on the textarea and buttons.                                                                                                                                                                                                                                                            |
+| **Panel size**                | Constrain width with `**min-width` / `max-width`** so long comments do not span the viewport.                                                                                                                                                                                                                                                                                      |
+
 
 ### Editable vs frozen (plan item)
 
 
 | State        | When                                                                                                                                                          | Behavior                                                                                                                                                                             |
 | ------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| **Editable** | The plan is the latest assistant output in the live session **and** the user has not yet sent a subsequent analyst message that completed a server round-trip | Text selection enabled; “+” to add feedback; feedback active/inactive editing states apply.                                                                                          |
+| **Editable** | The plan is the latest assistant output in the live session **and** the user has not yet sent a subsequent analyst message that completed a server round-trip | Text selection enabled; “+” to add feedback; each feedback row is **Editing** while the plan stays editable (see [Feedback component states](#feedback-component-states)).               |
 | **Frozen**   | Loaded from `GET` session, or after the user sends the next message and the stream completes                                                                  | **Default browser selection** on plan text (copy, highlight) works as usual. **No** “+” affordance and **no** new anchored comments. Existing feedback UI in **reading** state only. |
 
 
@@ -58,23 +84,23 @@ Each plan history item has:
 
 ### Feedback component states
 
+There are **two** states only: **Editing** (draft on an editable plan) and **reading** (submitted / frozen history). There is **no** separate collapsed **“+”**-only row state.
 
-| State        | When                                                   | UI                                                                                                                                 |
-| ------------ | ------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------- |
-| **Active**   | Component has focus or is explicitly opened for edit   | `textarea` grows with content (auto-resize); full draft text is visible and editable. **The plan text this comment applies to** (`quoted_text`) **is visually highlighted** in the plan body. |
-| **Inactive** | Editable parent, not focused, comment has saved text   | Collapsed: show **only** the **“+”** symbol (same family as the add-feedback control—styling may match). **No** comment text, truncated preview, or placeholder copy. **No** anchor highlight on the plan text (same highlight treatment as when no comment is “in play”). |
-| **Reading**  | Parent plan is **frozen**                              | Full comment text, disabled/read-only (not the **“+”**-only chrome—this is review of submitted feedback). **The corresponding plan span** (`quoted_text`) **is visually highlighted** so the comment is tied to its source. |
+**Initial entry:** **Editing** is entered only from user action (**“+”**) on an **editable** plan. **reading** is entered from **initial hydrate** when the plan item is already **frozen** (e.g. session cold load)—feedback rows **do not** need to have been **Editing** in this session first. **reading** is also entered when an **Editing** row’s parent plan **becomes frozen** (e.g. after send).
+
+| State       | When                                                                                                           | UI                                                                                                                                                                                                                                                                                                                                                                                                                       |
+| ----------- | -------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **Editing** | Editable parent; the analyst is composing or revising the comment for this anchor                              | `textarea` grows with content (auto-resize); full draft text is visible and editable. **The plan text this comment applies to** (`quoted_text`) **is visually highlighted** in the plan body. **Blur** does **not** exit **Editing** when `**comment`** has non-whitespace text (see **Focus rule** below). Multiple feedback rows may be **Editing** at the same time (each with its own overlay and highlight).          |
+| **reading** | Parent plan is **frozen**—including **first paint** after load from `GET` session or replay of past turns, not only after an in-session transition from **Editing** | Full comment text, disabled/read-only. **The corresponding plan span** (`quoted_text`) **is visually highlighted** so the comment is tied to its source.                                                                                                                                                                                                                                                              |
 
 
-**Anchor highlight rule:** While a feedback block is in **active** or **reading** state, the **selected / quoted span** in the rendered plan (the substring the comment refers to) is **highlighted** (e.g. background tint, underline, or `<mark>`-style emphasis—implementation choice, consistent token across both states). In **inactive** state, that highlight is **off** so only one comment’s anchor is emphasized at a time when editing multiple notes.
+**Anchor highlight rule:** While a feedback block is in **Editing** or **reading** state, the **selected / quoted span** in the rendered plan (the substring the comment refers to) is **highlighted** (e.g. background tint, underline, or `<mark>`-style emphasis—implementation choice, consistent token across both states).
 
-When multiple feedback blocks attach to the **same** anchor region, **stack them vertically** in normal flow (e.g. a local flex column with gap)—still no global column beside the plan.
+When multiple feedback blocks attach to the **same** (or near-identical) anchor, **stack them vertically** using the **overlay stack offset** above—not a separate column beside the plan and not in-flow blocks under the markdown.
 
-**Removal rule:** When the parent plan is **editable** and a feedback component **loses focus** (is unselected) and its text is **empty** (whitespace-only counts as empty), **remove** that feedback entry from the list / DOM.
+**Removal rule:** When the parent plan is **editable** and a feedback component **loses focus** (**blur**) and its `**comment`** is **empty** (whitespace-only counts as empty), **remove** that feedback entry from the list / DOM.
 
-**Focus rule:** When the Analyst presses **“+”** (floating or on a new anchor), the new feedback component’s **textarea is focused immediately** (and caret placed inside), so typing can start without an extra click.
-
-**Re-open rule:** When a block is **inactive** (**“+”** only), activating it again (e.g. click or keyboard focus on **“+”**) returns to **active** with the saved draft text restored in the textarea.
+**Focus rule:** (1) When the Analyst presses **“+”** (floating or on a new anchor), the new feedback component’s **textarea is focused immediately** (and caret placed inside), so typing can start without an extra click. (2) When the block is in **Editing** and `**comment`** contains **non-whitespace** text, **blur** does **not** change component state—the block **stays Editing** (e.g. `textarea` remains visible; focus may move elsewhere). (3) **Removal rule** still applies: **blur** with **empty** `**comment`** removes the component.
 
 ### Applying feedback
 
@@ -94,7 +120,7 @@ On send:
 
 ### Assistant returns plan — history item type and editable state
 
-**Given** the assistant returns a plan (`assistant` turn kind **`plan`**)  
+**Given** the assistant returns a plan (`assistant` turn kind `**plan`**)  
 **Then** the history renders that turn as a **plan** history item  
 **And** the plan item is **editable** until the analyst completes the next send (successful round-trip).
 
@@ -104,52 +130,38 @@ On send:
 **When** the analyst selects text in the plan body  
 **Then** a **“+”** control appears near the selection (minimal positioning only; e.g. one-off placement from `Range` / selection rect).
 
-### Editable plan — “+” adds anchored feedback and focuses textarea
+### Editable plan — “+” adds overlay feedback and focuses textarea
 
 **Given** the plan item is **editable**  
 **And** the analyst has selected text in the plan  
 **When** the analyst clicks **“+”**  
-**Then** a feedback block appears **anchored in document flow** at that selection (per implementation in [Steps](#steps))  
+**Then** a feedback block appears as an **overlay** at the **same anchor** as the **“+”** (per [Overlay positioning](#overlay-positioning-feedback-at-selection) and [FeedbackBlock implementation](#feedbackblock-implementation))  
 **And** the feedback **textarea is focused immediately** so the analyst can type without further interaction.
 
-### Editable plan — multiple comments on the same anchor stack in flow
+### Editable plan — multiple comments on the same anchor stack overlays
 
 **Given** the plan item is **editable**  
 **When** the analyst adds another comment on the **same** anchor region  
-**Then** the new feedback blocks **stack vertically** in normal flow below prior ones for that anchor.
+**Then** the new feedback overlays **stack vertically** (offset **top**) so they do not fully obscure each other.
 
-### Feedback block — focus expands to active editing
+### Feedback block — focus expands to editing
 
 **Given** a feedback block exists on an **editable** plan  
 **When** the analyst focuses the block  
-**Then** it becomes **active** with a growing textarea.
+**Then** it becomes **Editing** with a growing textarea.
 
-### Feedback block — active state highlights quoted plan text
+### Feedback block — editing state highlights quoted plan text
 
-**Given** a feedback block is **active** on an **editable** plan  
+**Given** a feedback block is **Editing** on an **editable** plan  
 **Then** the span of plan text this comment is tied to (**quoted_text**) is **visually highlighted** in the plan body  
 **And** the highlight is distinct from unmarked plan text (see [FeedbackBlock implementation](#feedbackblock-implementation)).
 
-### Feedback block — blur collapses to “+” when text present
+### Feedback block — blur keeps editing when comment has text
 
-**Given** a feedback block exists on an **editable** plan  
-**And** the block contains **non-whitespace** text  
-**When** the analyst moves focus away from the block  
-**Then** it collapses to a compact control that shows **only** the **“+”** symbol  
-**And** **no** comment text is visible in that collapsed state  
-**And** it becomes **inactive**.
-
-### Feedback block — inactive state does not highlight quoted plan text
-
-**Given** a feedback block is **inactive**  
-**Then** the associated **quoted_text** span in the plan does **not** use the anchor highlight style reserved for **active** and **reading** states.
-
-### Feedback block — inactive “+” re-opens active editing
-
-**Given** a feedback block is **inactive** and contains saved **non-whitespace** text  
-**When** the analyst activates the **“+”** (e.g. click or keyboard focus per implementation)  
-**Then** the block becomes **active** again  
-**And** the textarea shows the saved draft text for further editing.
+**Given** a feedback block is **Editing** on an **editable** plan  
+**And** the block’s `**comment`** contains **non-whitespace** text  
+**When** the analyst moves focus away from the block (**blur**)  
+**Then** the block **remains Editing** (state does not change solely because of **blur**).
 
 ### Editable plan — empty feedback removed on blur
 
@@ -180,45 +192,47 @@ On send:
 **Then** it is shown in the **reading** (disabled) presentation  
 **And** it is **not** an editable textarea.
 
+### Session load — frozen feedback is reading from first paint
+
+**Given** the analyst opens a session from the server (`GET`) **and** a plan turn has persisted inline feedback **and** that plan item is **frozen**  
+**Then** each feedback row is **reading** as soon as the UI renders  
+**And** rows **do not** go through **Editing** in this session before appearing as **reading**.
+
 ### Feedback block — reading state highlights quoted plan text
 
 **Given** the plan item is **frozen**  
 **And** a feedback block is in **reading** state  
 **Then** the plan body shows a **visual highlight** on the span matching **quoted_text** for that comment  
-**And** the highlight uses the same anchor-highlight treatment as in **active** state (role-distinct styling optional, but the “linked quote” affordance is consistent).
+**And** the highlight uses the same anchor-highlight treatment as in **Editing** state (role-distinct styling optional, but the “linked quote” affordance is consistent).
 
 ---
 
 ## FeedbackBlock implementation
 
-This section expands how **`FeedbackBlock`** (and its parent **`PlanHistoryItem`**) are built in **ordered implementation steps**. It does not replace the [Steps](#steps) roadmap; it details the **web** component work that step 8 summarizes.
+This section expands how `**FeedbackBlock`** (and its parent `**PlanHistoryItem**`) are built in **ordered implementation steps**. It does not replace the [Steps](#steps) roadmap; it details the **web** component work that step 8 summarizes.
 
-1. **Model each feedback row**  
-   Persist in component state (and eventually the API): stable `id`, **`quoted_text`** (exact substring from the plan at selection time), **`body`** (comment draft), and **`state`** (`active` \| `inactive` \| `reading`). Optionally store **anchor hints** (e.g. character offsets into source markdown) if the UI needs to re-locate text after re-render—see follow-ups for ambiguity.
-
-2. **Own the state machine**  
-   - **→ active:** focus enters the `textarea`; or user activates **“+”** from **inactive**; or new block after floating **“+”** (starts **active** with focused textarea).  
-   - **→ inactive:** blur from **active** when **`body`** has non-whitespace text.  
-   - **→ reading:** parent plan becomes **frozen** (hydrated or after send).  
-   - **Remove:** blur from **active** when **`body`** is empty/whitespace on an **editable** plan.  
+1. **Model each feedback row**
+  Persist in component state (and on the server for send/hydrate): stable `id`, `**quoted_text`**, `**comment**` (draft / submitted text), `**state**` (`**editing**` \| `**reading**` only). Add **client-only** `**anchor?: { x, y }`** for overlay placement (same convention as the **“+”**). Server payloads omit `**anchor`**; the client **hydrates** it from the highlighted `<mark>` after paint when missing—see [Overlay positioning](#overlay-positioning-feedback-at-selection). Optional future: character offsets into source markdown for disambiguation—see follow-ups.
+2. **Own the state machine**
+  - **→ Editing:** from **new** feedback only—after floating **“+”** on an **editable** plan (focused `textarea`); while the parent plan is editable, rows remain **Editing** (multiple rows allowed).  
+  - **→ reading (from root):** when building UI from persisted session/history, if the plan item is **frozen**, create or map each feedback row as **`state: reading`** immediately—**no** prior **Editing** step in this session.  
+  - **Stays Editing on blur:** when `**comment`** has non-whitespace text, **blur** does **not** change state.  
+  - **→ reading (from Editing):** parent plan becomes **frozen** (e.g. after send).  
+  - **Remove:** **blur** from **Editing** when `**comment`** is empty/whitespace on an **editable** plan.  
    Document transitions in code comments or a small table next to the component for handoff.
-
-3. **Anchor highlight coordination (parent + child)**  
-   **`PlanHistoryItem`** (or equivalent) should know which feedback id(s) require a highlight. Pass **“highlighted quoted spans”** derived from: all **`reading`** blocks on a frozen plan, and the **`active`** block on an editable plan (**inactive** ids excluded). Render the plan markdown **once**, then post-process the DOM or apply layered `<mark>` / `data-feedback-id` wrappers so the quoted substring is wrapped with a shared class (e.g. `plan-feedback-anchor`) for **active** and **reading**. Avoid N× full re-parses per keystroke; debounce or tie updates to state changes, not every input event.
-
-4. **Apply / clear highlight by state**  
-   When a block becomes **active** or **reading**, ensure its **`quoted_text`** is highlighted in the plan. When it becomes **inactive**, remove that id from the highlight set so the span returns to normal appearance. When switching **active** between two blocks, update the highlight set so only the focused block’s anchor is emphasized among editable comments (unless product later allows multiple **active**—out of scope).
-
-5. **Render the three chrome modes**  
-   - **Active:** visible `textarea`, auto-resize (`scrollHeight` or CSS `field-sizing` where supported).  
-   - **Inactive:** single control showing **“+”** only; button or focusable glyph that calls **→ active** and restores **`body`**.  
-   - **Reading:** static text or disabled `textarea`; no **“+”**; pointer/selection behavior per frozen plan rules.
-
-6. **Accessibility**  
-   Associate the feedback control with the quoted span where practical (`aria-details` / `aria-describedby` or a visually hidden description). Ensure **“+”** has an accessible name (e.g. “Add or expand comment”).
-
-7. **Tests / manual checks**  
-   Align manual QA with [Behavior-driven design](#behavior-driven-design-acceptance-criteria): active + reading show highlight; inactive does not; frozen reading still highlights.
+3. **Anchor highlight coordination (parent + child)**
+  `**PlanHistoryItem`** should know which feedback id(s) require a highlight. Derive highlights from: all `**reading**` blocks on a frozen plan, and all `**editing**` blocks on an editable plan. Render the plan markdown **once**, then post-process the HTML string (or equivalent) to wrap `**quoted_text`** with `<mark data-feedback-highlight="{id}">` (or shared class) for **Editing** and **reading**. Use that same `**id`** when hydrating `**anchor**` from the live DOM after paint. Avoid re-parsing on every keystroke; tie highlight rebuilds to feedback **state** / list changes, not every input event.
+4. **Overlay placement (parent)**
+  Render each `**FeedbackBlock`** inside a `**position: absolute**` wrapper within the `**position: relative**` plan root. Set `**left` / `top**` from `**anchor**` plus **stack offset** when multiple comments share a bucket. Keep `**transform: translateY(-100%)`** (or equivalent) aligned with the **“+”** so the panel sits in the same visual slot. Ensure `**z-index`** and `**max-width**` per [Overlay positioning](#overlay-positioning-feedback-at-selection).
+5. **Apply / clear highlight by state**
+  When a block is **Editing** or **reading**, ensure its `**quoted_text`** is highlighted in the plan. When a row is **removed** (empty blur), remove that id from the highlight set. Multiple **Editing** rows may be highlighted at once.
+6. **Render the two chrome modes**
+  - **Editing:** visible `textarea`, auto-resize (`scrollHeight` or CSS `field-sizing` where supported); remains so after **blur** if `**comment`** has non-whitespace text.  
+  - **reading:** static text or disabled `textarea`; pointer/selection behavior per frozen plan rules.
+7. **Accessibility**
+  Associate the feedback control with the quoted span where practical (`aria-details` / `aria-describedby` or a visually hidden description). Ensure **“+”** and the overlay wrapper have accessible names (e.g. “Add comment on selection”, “Comment on selected plan text”).
+8. **Tests / manual checks**
+  Align manual QA with [Behavior-driven design](#behavior-driven-design-acceptance-criteria): **Editing** + **reading** show highlight; frozen **reading** still highlights; **blur** with non-empty `**comment`** keeps **Editing**; empty **blur** removes the row.
 
 ---
 
@@ -245,19 +259,22 @@ This section expands how **`FeedbackBlock`** (and its parent **`PlanHistoryItem`
   - Update `sendMessage` to accept optional structured feedback and serialize into the POST body.  
   - **Won’t do:** Keep a single `body` string for plan turns without a parallel structure.
 6. `**PlanHistoryItem` layout component (web)**
-  - Add `services/orchestration-web/src/lib/components/PlanHistoryItem.svelte` (name may vary): **single full-width** column for the plan; comment UI lives **in flow** next to or under the anchored fragment (not a second column).  
-  - **Won’t do:** Dual-column grid with fixed feedback rail and scroll-synced alignment.
-7. **Selection, “+”, and in-flow anchor (web)**
-  - On the editable plan markdown container, listen for `mouseup` / `selectionchange` (debounced) to detect user selections wholly inside the plan root.  
-  - Render a small floating “+” near the selection only if needed; keep positioning to the **minimum** (e.g. one `getBoundingClientRect` for the toolbar, or inline control—choose the smallest viable approach).  
-  - On “+”: capture **exact `quoted_text`** from the selection; insert the feedback UI using **DOM flow** (e.g. wrap range / insert adjacent block after the containing paragraph or list item so the comment sits **under** the relevant plan segment without absolute coordinates). Persist a stable `id` and anchor metadata for the API (character offsets in source markdown if available, or quoted text + order—document ambiguity if the same substring repeats).  
-  - **Immediately** `focus()` the new feedback `textarea` (e.g. after tick/`requestAnimationFrame` if Svelte mount order requires it).  
-  - **Won’t do:** Allow selections that span outside the plan root; **won’t do:** continuous layout recomputation for side-aligned panels.
+  - Implement `services/orchestration-web/src/lib/components/PlanHistoryItem.svelte`: **single full-width** plan column; `**position: relative`** plan root. **Feedback** is **not** a list below the markdown—it is `**FeedbackBlock`** instances inside **absolutely positioned** wrappers at `**anchor`** (see [Overlay positioning](#overlay-positioning-feedback-at-selection)).  
+  - **Won’t do:** Dual-column grid with fixed feedback rail; **won’t do:** in-flow feedback list under the plan for this PoC.
+7. **Selection, “+”, and overlay anchor (web)**
+  - On the editable plan markdown container, listen for `selectionchange` (and/or pointer events) to detect selections wholly inside the plan root.  
+  - Render a floating **“+”** near the selection using `**getBoundingClientRect()`** vs the plan root.  
+  - On **“+”**: capture `**quoted_text`**; create a feedback row with **client-only `anchor`** matching the **“+”** coordinates; render `**FeedbackBlock`** in an overlay wrapper at that anchor. Persist stable `**id**` for highlights and API; optional future: character offsets for disambiguation—document ambiguity if the same substring repeats.  
+  - `**$effect` + `tick` + `requestAnimationFrame`:** for rows missing `**anchor`** (e.g. server-hydrated **reading**), measure `**<mark data-feedback-highlight="{id}">`** and set `**anchor**`, with **fallback** inset if no mark exists.  
+  - **Immediately** `focus()` the new feedback `textarea` after mount if needed.  
+  - **Won’t do:** Allow selections outside the plan root; **won’t do:** `ResizeObserver` / scroll listeners solely to re-pin overlays every frame.
 8. `**FeedbackBlock` component (web)**
-  - Props: `text`, `state` (`active` | `inactive` | `reading`), `onUpdate`, `onBlur` / focus handlers.  
-  - **Active:** auto-resize `textarea` with full draft. **Inactive:** collapsed UI is **only** a **“+”** control (no visible comment text, no truncated line, no placeholder string); activating it returns to **active** with text restored. **Reading:** full comment text, readonly/disabled (frozen plan).  
-  - On blur: if trimmed text is empty and parent is **editable**, **remove** this block and notify parent.  
-  - Vertical stacking for multiple comments on the same anchor: local flex column with gap—**in flow**, same anchor container.
+  - Props: feedback model (`quoted_text`, `comment`, `state`, …), `frozen`, `onUpdate`, `onRemove`, optional blur / focus handlers.  
+  - **Popover styling:** shadow, bounded width, no block `**margin-top`** that assumes a list below the plan.  
+  - **Editing:** auto-resize `textarea`; **blur** with non-whitespace `**comment`** keeps **Editing**.
+  - **reading:** full comment, readonly.  
+  - On blur: if trimmed `**comment`** is empty and parent is **editable**, **remove** the row.  
+  - **Stacking:** parent applies **vertical step** when multiple overlays share the same anchor bucket (not an in-flow flex list).
 9. **Integrate with `History.svelte` / session page**
   - Branch `HistoryItem` vs `PlanHistoryItem` based on assistant `kind === 'plan'`.  
     - Track which message index is the “latest editable plan” using message list length and frozen flags after send.  
@@ -276,7 +293,7 @@ This section expands how **`FeedbackBlock`** (and its parent **`PlanHistoryItem`
 - **XSS / HTML:** Reuse the same markdown sanitization as `HistoryItem`; do not inject raw user feedback as HTML.
 - **Prompt size:** Cap number of inline comments and per-comment length in the API model to avoid runaway tokens.
 - **UX consistency:** Typography, borders, and spacing match existing history items; anchored comments should read as secondary to the plan (subtle background, clear hierarchy).
-- **Light layout:** No requirement for pixel-perfect side alignment; reject approaches that depend on scroll listeners or `ResizeObserver` solely to pin comments beside arbitrary line boxes unless a later milestone demands it.
+- **Light layout:** Overlay positions are computed **at create** and **on hydrate** (from highlight marks), not continuously synced with scroll/resize via `ResizeObserver` unless a later milestone demands it.
 - **Quality gates:** `ruff check` and `pytest` on `services/orchestration-server/`; web lint/build as configured in the repo.
 
 ## Follow-ups / deferred work

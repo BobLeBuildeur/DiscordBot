@@ -28,6 +28,7 @@ class TurnRecord(BaseModel):
     role: TurnRole
     kind: str
     content: str
+    inline_feedback: list["PlanInlineFeedbackItem"] = Field(default_factory=list)
     created_at: datetime = Field(default_factory=utc_now)
     prompt_name: str | None = None
     prompt_path: str | None = None
@@ -54,6 +55,11 @@ class PromptResponseMetadata(BaseModel):
 class GeneratedResponse(BaseModel):
     content: str
     metadata: PromptResponseMetadata
+
+
+class PlanInlineFeedbackItem(BaseModel):
+    quoted_text: str = Field(min_length=1)
+    comment: str = Field(min_length=1)
 
 
 class PlanVersion(BaseModel):

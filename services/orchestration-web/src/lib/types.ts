@@ -1,8 +1,21 @@
 export type Role = 'agent' | 'analyst';
 
+export interface PlanInlineFeedback {
+	id: string;
+	quoted_text: string;
+	comment: string;
+	state: 'editing' | 'reading';
+	/** Client-only overlay position relative to `.plan-body` (same convention as the floating "+"). */
+	anchor?: { x: number; y: number };
+}
+
 export interface Message {
+	id: string;
 	role: Role;
 	body: string;
+	kind: string;
+	frozen: boolean;
+	inline_feedback: PlanInlineFeedback[];
 }
 
 export interface SessionEvent {

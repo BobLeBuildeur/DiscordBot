@@ -9,6 +9,7 @@ from backend.integrations.openai_client import LLMClient
 from backend.orchestrator.models import (
     GeneratedResponse,
     NextAction,
+    PlanInlineFeedbackItem,
     PlanVersion,
     SessionState,
     StateCheck,
@@ -85,21 +86,35 @@ class OrchestratorEngine:
         self.store.save_session(session)
         yield from self._stream_turn(session, problem_statement)
 
-    def advance_session(self, session_id: str, user_message: str) -> OrchestrationResult:
-        for kind, _data in self.advance_session_streaming(session_id, user_message):
+    def advance_session(
+        self,
+        session_id: str,
+        user_message: str,
+        plan_inline_feedback: list[PlanInlineFeedbackItem] | None = None,
+    ) -> OrchestrationResult:
+        for kind, _data in self.advance_session_streaming(
+            session_id,
+            user_message,
+            plan_inline_feedback,
+        ):
             if kind == "final":
                 break
         return self._result_from_session(self.store.load_session(session_id))
 
     def advance_session_streaming(
-        self, session_id: str, user_message: str
+        self,
+        session_id: str,
+        user_message: str,
+        plan_inline_feedback: list[PlanInlineFeedbackItem] | None = None,
     ) -> Iterator[tuple[str, dict[str, object]]]:
         session = self.store.load_session(session_id)
+        inline_feedback = plan_inline_feedback or []
         message_kind = "plan_feedback" if session.current_plan_markdown else "user_message"
         user_turn = TurnRecord(
             role=TurnRole.USER,
             kind=message_kind,
             content=user_message,
+            inline_feedback=inline_feedback,
         )
         session.conversation_history.append(user_turn)
         self.store.append_step_artifact(
@@ -108,15 +123,19 @@ class OrchestratorEngine:
             {"turn": user_turn.model_dump(mode="json")},
         )
         self.store.save_session(session)
-        yield from self._stream_turn(session, user_message)
+        yield from self._stream_turn(session, user_message, inline_feedback)
 
     def get_session(self, session_id: str) -> SessionState:
         return self.store.load_session(session_id)
 
     def _stream_turn(
-        self, session: SessionState, latest_user_message: str
+        self,
+        session: SessionState,
+        latest_user_message: str,
+        inline_feedback: list[PlanInlineFeedbackItem] | None = None,
     ) -> Iterator[tuple[str, dict[str, object]]]:
         yield ("session", {"session_id": session.session_id})
+        feedback = inline_feedback or []
 
         state_prompt = self.prompt_manager.build_state_check_prompt(session, latest_user_message)
         state_check = self.llm_client.run_state_check(state_prompt)
@@ -133,7 +152,7 @@ class OrchestratorEngine:
         )
 
         prompt, assistant_kind, stream_kind = self._resolve_generation_prompt(
-            session, latest_user_message, state_check
+            session, latest_user_message, state_check, feedback
         )
 
         stream_iter = self._generation_stream(stream_kind, prompt)
@@ -233,6 +252,7 @@ class OrchestratorEngine:
         session: SessionState,
         latest_user_message: str,
         state_check: StateCheck,
+        inline_feedback: list[PlanInlineFeedbackItem],
     ) -> tuple[BuiltPrompt, str, str]:
         if state_check.next_action == NextAction.ASK_FOLLOW_UP:
             prompt = self.prompt_manager.build_problem_understanding_prompt(
@@ -245,7 +265,11 @@ class OrchestratorEngine:
             prompt = self.prompt_manager.build_plan_generation_prompt(session, latest_user_message)
             return prompt, "plan", "create_plan"
 
-        prompt = self.prompt_manager.build_plan_refinement_prompt(session, latest_user_message)
+        prompt = self.prompt_manager.build_plan_refinement_prompt(
+            session,
+            latest_user_message,
+            inline_feedback,
+        )
         return prompt, "plan", "refine_plan"
 
     def _generation_stream(self, stream_kind: str, prompt: BuiltPrompt) -> Iterator[str]:

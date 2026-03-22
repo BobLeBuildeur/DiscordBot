@@ -153,10 +153,22 @@ def test_engine_generates_and_refines_plan_with_latest_plan_in_context(test_sett
     third_turn = engine.advance_session(
         session_id,
         "Refine it for executive review and add approval criteria.",
+        [
+            {
+                "quoted_text": "Create the first plan.",
+                "comment": "Make this explicitly for executive stakeholders.",
+            }
+        ],
     )
     assert third_turn.assistant_turn.kind == "plan"
     assert third_turn.session.current_plan_markdown.startswith("## Goal\n\nCreate a revised plan")
     assert len(third_turn.session.plan_versions) == 2
     assert llm_client.refinement_prompts[0].path.name == "plan-refinement.md"
     assert "Create the first plan." in llm_client.refinement_prompts[0].user_prompt
+    assert "Inline Plan Feedback" in llm_client.refinement_prompts[0].user_prompt
+    assert "Selected text: Create the first plan." in llm_client.refinement_prompts[0].user_prompt
+    assert (
+        third_turn.session.conversation_history[-2].inline_feedback[0].comment
+        == "Make this explicitly for executive stakeholders."
+    )
     assert llm_client.metadata_prompts[2].path.name == "response-metadata.md"

@@ -117,7 +117,13 @@ def test_api_streams_session_and_persists_final_state(test_settings):
         "POST",
         f"/orchestrator/sessions/{session_id}/messages",
         json={
-            "message": ("The audience is operations leadership and success means faster approvals.")
+            "message": ("The audience is operations leadership and success means faster approvals."),
+            "plan_inline_feedback": [
+                {
+                    "quoted_text": "Draft the workflow.",
+                    "comment": "Add explicit owner handoff.",
+                }
+            ],
         },
     ) as response:
         assert response.status_code == 200
@@ -133,3 +139,4 @@ def test_api_streams_session_and_persists_final_state(test_settings):
     session_payload = session_response.json()
     assert session_payload["latest_state_check"]["next_action"] == "create_plan"
     assert session_payload["current_plan_markdown"].startswith("## Goal")
+    assert session_payload["conversation_history"][-2]["inline_feedback"][0]["quoted_text"] == "Draft the workflow."

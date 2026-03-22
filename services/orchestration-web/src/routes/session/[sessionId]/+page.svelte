@@ -5,6 +5,24 @@
 	import { getSession, sendMessage } from '$lib/api.js';
 	import type { Message } from '$lib/types.js';
 
+	function createMessage(
+		role: Message['role'],
+		body: string,
+		kind = 'message',
+		frozen = true
+	): Message {
+		const idPart =
+			globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+		return {
+			id: `${role}-${kind}-${idPart}`,
+			role,
+			body,
+			kind,
+			frozen,
+			inline_feedback: []
+		};
+	}
+
 	let sessionId = $derived(page.params.sessionId ?? '');
 
 	let messages: Message[] = $state([]);
@@ -13,9 +31,23 @@
 	let sending = $state(false);
 	let streamingBody = $state('');
 	let isStreaming = $state(false);
+	let streamingAssistantKind = $state('message');
+	const streamingMessageId = 'streaming-agent';
 
 	let displayMessages: Message[] = $derived(
-		isStreaming ? [...messages, { role: 'agent', body: streamingBody }] : messages
+		isStreaming
+			? [
+					...messages,
+					{
+						id: streamingMessageId,
+						role: 'agent',
+						body: streamingBody,
+						kind: streamingAssistantKind,
+						frozen: true,
+						inline_feedback: []
+					}
+				]
+			: messages
 	);
 
 	$effect(() => {
@@ -52,35 +84,78 @@
 
 	async function handleSend(text: string) {
 		sending = true;
-		messages = [...messages, { role: 'analyst', body: text }];
+		const latestPlanIndex = [...messages]
+			.reverse()
+			.findIndex((msg) => msg.role === 'agent' && msg.kind === 'plan' && !msg.frozen);
+		const editablePlanIndex =
+			latestPlanIndex >= 0 ? messages.length - 1 - latestPlanIndex : -1;
+		const inlineFeedback =
+			editablePlanIndex >= 0
+				? messages[editablePlanIndex].inline_feedback
+						.filter((item) => item.comment.trim().length > 0)
+						.map((item) => ({
+							quoted_text: item.quoted_text,
+							comment: item.comment.trim()
+						}))
+				: [];
+
+		if (editablePlanIndex >= 0) {
+			messages = messages.map((msg, index) =>
+				index === editablePlanIndex
+					? {
+							...msg,
+							frozen: true,
+							inline_feedback: msg.inline_feedback.map((item) => ({
+								...item,
+								state: 'reading'
+							}))
+						}
+					: msg
+			);
+		}
+
+		messages = [...messages, createMessage('analyst', text)];
 		streamingBody = '';
+		streamingAssistantKind = 'message';
 		isStreaming = true;
 
 		try {
-			await sendMessage(sessionId, text, {
+			await sendMessage(sessionId, text, inlineFeedback, {
 				onChunk(data) {
 					streamingBody += data.content;
 				},
 				onFinal(data) {
 					streamingBody = data.assistant_message;
+					streamingAssistantKind = data.assistant_kind || 'message';
 				}
 			});
 
 			isStreaming = false;
-			messages = [...messages, { role: 'agent', body: streamingBody }];
+			messages = [
+				...messages,
+				createMessage(
+					'agent',
+					streamingBody,
+					streamingAssistantKind,
+					streamingAssistantKind === 'plan' ? false : true
+				)
+			];
 		} catch (err) {
 			isStreaming = false;
 			console.error('Failed to send message:', err);
 			messages = [
 				...messages,
-				{
-					role: 'agent',
-					body: `Error: ${err instanceof Error ? err.message : 'Unknown error'}`
-				}
+				createMessage('agent', `Error: ${err instanceof Error ? err.message : 'Unknown error'}`)
 			];
 		} finally {
 			sending = false;
 		}
+	}
+
+	function handlePlanFeedbackChange(messageId: string, inlineFeedback: Message['inline_feedback']) {
+		messages = messages.map((message) =>
+			message.id === messageId ? { ...message, inline_feedback: inlineFeedback } : message
+		);
 	}
 </script>
 
@@ -92,7 +167,12 @@
 	<header class="session-header">
 		<span class="session-id">Session: {sessionId}</span>
 	</header>
-	<History messages={displayMessages} {loading} {loadError} />
+	<History
+		messages={displayMessages}
+		{loading}
+		{loadError}
+		onPlanFeedbackChange={handlePlanFeedbackChange}
+	/>
 	<MessageInput onSend={handleSend} disabled={sending || loading} />
 </div>
 

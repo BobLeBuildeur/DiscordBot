@@ -1,5 +1,11 @@
 import { PUBLIC_ORCHESTRATION_API_URL } from '$env/static/public';
-import type { Message, SessionEvent, ChunkEvent, FinalEvent } from './types.js';
+import type {
+	Message,
+	SessionEvent,
+	ChunkEvent,
+	FinalEvent,
+	PlanInlineFeedback
+} from './types.js';
 
 const BASE = PUBLIC_ORCHESTRATION_API_URL ?? '';
 
@@ -93,21 +99,74 @@ export async function startSession(
 export async function sendMessage(
 	sessionId: string,
 	message: string,
+	planInlineFeedback: Array<{ quoted_text: string; comment: string }> = [],
 	callbacks: SSECallbacks
 ): Promise<void> {
-	await streamSSE(`${BASE}/orchestrator/sessions/${sessionId}/messages`, { message }, callbacks);
+	await streamSSE(
+		`${BASE}/orchestrator/sessions/${sessionId}/messages`,
+		{ message, plan_inline_feedback: planInlineFeedback },
+		callbacks
+	);
 }
 
-/** Map GET session wire format (user/assistant + content) to UI `Message` (analyst/agent + body). */
+function buildMessageId(index: number, role: string, kind: string): string {
+	return `${index}-${role}-${kind}`;
+}
+
+/** Server payloads omit UI-only `anchor`; PlanHistoryItem derives it from highlight marks after paint. */
+function toReadingFeedback(
+	raw: Array<{ quoted_text: string; comment: string }>
+): PlanInlineFeedback[] {
+	return raw.map((item, idx) => ({
+		id: `server-${idx}-${item.quoted_text.slice(0, 12)}`,
+		quoted_text: item.quoted_text,
+		comment: item.comment,
+		state: 'reading'
+	}));
+}
+
 function conversationHistoryToMessages(
-	history: Array<{ role: string; content: string }>
+	history: Array<{
+		role: string;
+		content: string;
+		kind?: string;
+		inline_feedback?: Array<{ quoted_text: string; comment: string }>;
+	}>
 ): Message[] {
 	const out: Message[] = [];
+	let lastPlanIndex = -1;
 	for (const turn of history) {
+		const kind = typeof turn.kind === 'string' ? turn.kind : 'message';
+		const id = buildMessageId(out.length, turn.role, kind);
 		if (turn.role === 'user') {
-			out.push({ role: 'analyst', body: turn.content });
+			out.push({
+				id,
+				role: 'analyst',
+				body: turn.content,
+				kind,
+				frozen: true,
+				inline_feedback: []
+			});
+			if (
+				lastPlanIndex >= 0 &&
+				Array.isArray(turn.inline_feedback) &&
+				turn.inline_feedback.length > 0
+			) {
+				out[lastPlanIndex].inline_feedback = toReadingFeedback(turn.inline_feedback);
+			}
 		} else if (turn.role === 'assistant') {
-			out.push({ role: 'agent', body: turn.content });
+			const isPlan = kind === 'plan';
+			out.push({
+				id,
+				role: 'agent',
+				body: turn.content,
+				kind,
+				frozen: true,
+				inline_feedback: []
+			});
+			if (isPlan) {
+				lastPlanIndex = out.length - 1;
+			}
 		}
 	}
 	return out;
@@ -122,7 +181,14 @@ export async function getSession(sessionId: string): Promise<Message[]> {
 	const data = (await response.json()) as { conversation_history?: unknown };
 	const raw = Array.isArray(data.conversation_history) ? data.conversation_history : [];
 	const turns = raw.filter(
-		(item): item is { role: string; content: string } =>
+		(
+			item
+		): item is {
+			role: string;
+			content: string;
+			kind?: string;
+			inline_feedback?: Array<{ quoted_text: string; comment: string }>;
+		} =>
 			item !== null &&
 			typeof item === 'object' &&
 			'role' in item &&
