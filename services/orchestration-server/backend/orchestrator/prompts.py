@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 
-from backend.orchestrator.models import SessionState, TurnRole
+from backend.orchestrator.models import PlanInlineFeedbackItem, SessionState, TurnRole
 
 
 @dataclass(frozen=True)
@@ -44,8 +44,15 @@ class PromptManager:
         self,
         session: SessionState,
         latest_message: str,
+        inline_feedback: list[PlanInlineFeedbackItem] | None = None,
     ) -> BuiltPrompt:
-        return self._build("plan-refinement.md", session, latest_message, "Plan Refinement")
+        return self._build(
+            "plan-refinement.md",
+            session,
+            latest_message,
+            "Plan Refinement",
+            inline_feedback=inline_feedback or [],
+        )
 
     def build_response_metadata_prompt(
         self,
@@ -80,6 +87,7 @@ class PromptManager:
         session: SessionState,
         latest_message: str,
         name: str,
+        inline_feedback: list[PlanInlineFeedbackItem] | None = None,
     ) -> BuiltPrompt:
         path = self.prompt_root / filename
         system_prompt = path.read_text(encoding="utf-8")
@@ -87,10 +95,16 @@ class PromptManager:
             name=name,
             path=path,
             system_prompt=system_prompt,
-            user_prompt=self._render_context(session, latest_message),
+            user_prompt=self._render_context(session, latest_message, inline_feedback or []),
         )
 
-    def _render_context(self, session: SessionState, latest_message: str) -> str:
+    def _render_context(
+        self,
+        session: SessionState,
+        latest_message: str,
+        inline_feedback: list[PlanInlineFeedbackItem] | None = None,
+    ) -> str:
+        feedback = inline_feedback or []
         conversation = self._format_conversation(session)
         latest_plan = session.current_plan_markdown or "None"
         return "\n".join(
@@ -106,6 +120,9 @@ class PromptManager:
                 "",
                 "# Latest Markdown Plan",
                 latest_plan,
+                "",
+                "# Inline Plan Feedback",
+                self._format_inline_feedback(feedback),
             ]
         )
 
@@ -117,4 +134,17 @@ class PromptManager:
         for turn in session.conversation_history:
             role = "Analyst" if turn.role == TurnRole.USER else "Assistant"
             lines.append(f"- {role} ({turn.kind}) at {turn.created_at.isoformat()}: {turn.content}")
+        return "\n".join(lines)
+
+    def _format_inline_feedback(self, inline_feedback: list[PlanInlineFeedbackItem]) -> str:
+        if not inline_feedback:
+            return "No inline feedback provided."
+
+        # TODO(plan-feedback): Ambiguous selections: If the same substring appears multiple times in
+        # the plan, PoC may attach feedback to the first match or require disambiguation—call out
+        # in release notes.
+        lines: list[str] = []
+        for index, item in enumerate(inline_feedback, start=1):
+            lines.append(f"{index}. Selected text: {item.quoted_text}")
+            lines.append(f"   Comment: {item.comment}")
         return "\n".join(lines)

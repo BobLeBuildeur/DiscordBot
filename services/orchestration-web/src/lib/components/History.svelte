@@ -1,15 +1,18 @@
 <script lang="ts">
 	import type { Message } from '$lib/types.js';
 	import HistoryItem from './HistoryItem.svelte';
+	import PlanHistoryItem from './PlanHistoryItem.svelte';
 
 	let {
 		messages,
 		loading = false,
-		loadError = null
+		loadError = null,
+		onPlanFeedbackChange
 	}: {
 		messages: Message[];
 		loading?: boolean;
 		loadError?: string | null;
+		onPlanFeedbackChange?: (messageId: string, feedback: Message['inline_feedback']) => void;
 	} = $props();
 
 	let container: HTMLElement | undefined = $state();
@@ -37,8 +40,18 @@
 	{:else if messages.length === 0}
 		<p class="empty-hint">Describe your problem to begin a new session.</p>
 	{/if}
-	{#each messages as msg (msg)}
-		<HistoryItem role={msg.role} body={msg.body} />
+	{#each messages as msg (msg.id)}
+		{#if msg.role === 'agent' && msg.kind === 'plan'}
+			<PlanHistoryItem
+				messageId={msg.id}
+				body={msg.body}
+				frozen={msg.frozen}
+				inlineFeedback={msg.inline_feedback}
+				onFeedbackChange={onPlanFeedbackChange}
+			/>
+		{:else}
+			<HistoryItem role={msg.role} body={msg.body} />
+		{/if}
 	{/each}
 </div>
 

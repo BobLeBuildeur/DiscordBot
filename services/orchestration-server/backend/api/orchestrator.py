@@ -8,6 +8,7 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
 from backend.orchestrator.engine import OrchestratorEngine
+from backend.orchestrator.models import PlanInlineFeedbackItem
 
 router = APIRouter(prefix="/orchestrator", tags=["orchestrator"])
 
@@ -18,6 +19,7 @@ class CreateSessionRequest(BaseModel):
 
 class SessionMessageRequest(BaseModel):
     message: str = Field(min_length=1)
+    plan_inline_feedback: list[PlanInlineFeedbackItem] = Field(default_factory=list)
 
 
 def get_engine(request: Request) -> OrchestratorEngine:
@@ -59,7 +61,11 @@ def add_message(
 ) -> StreamingResponse:
     return StreamingResponse(
         _sse_from_engine_stream(
-            engine.advance_session_streaming(session_id, payload.message),
+            engine.advance_session_streaming(
+                session_id,
+                payload.message,
+                payload.plan_inline_feedback,
+            ),
         ),
         media_type="text/event-stream",
     )
