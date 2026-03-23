@@ -8,6 +8,18 @@ alwaysApply: false
 
 A **milestone** is a major deliverable described in a markdown file.
 
+## Milestone files (naming)
+
+Store each milestone as a markdown file under the repository root `milestones/` directory.
+
+**Filename:** prefix the slug with the **ISO 8601 calendar date** (`YYYY-MM-DD`), then a hyphen, then the milestone title in **kebab-case**:
+
+`YYYY-MM-DD-[milestone-in-kebab-case].md`
+
+**Examples:** `2026-03-19-proof-of-concept.md`, `2026-04-01-orchestration-beta.md`
+
+Use the date the milestone document is **created** (or first committed), consistent with dated plans under `plans/`.
+
 ## Required Structure
 
 Each milestone must contain:
