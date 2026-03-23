@@ -160,13 +160,10 @@
 </script>
 
 <svelte:head>
-	<title>Session — {sessionId}</title>
+	<title>Session</title>
 </svelte:head>
 
 <div class="page">
-	<header class="session-header">
-		<span class="session-id">Session: {sessionId}</span>
-	</header>
 	<History
 		messages={displayMessages}
 		{loading}
@@ -181,17 +178,5 @@
 		display: flex;
 		flex-direction: column;
 		height: 100vh;
-	}
-
-	.session-header {
-		padding: 0.5rem 1rem;
-		border-bottom: 1px solid #e0e0e0;
-		background: #fafafa;
-	}
-
-	.session-id {
-		font-size: 0.8rem;
-		color: #888;
-		font-family: monospace;
 	}
 </style>
