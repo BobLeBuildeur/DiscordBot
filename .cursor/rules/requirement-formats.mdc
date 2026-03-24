@@ -1,0 +1,61 @@
+---
+description: ARO and User Story formats for requirements in milestones and plans
+globs: ["**/milestones/**/*.md", "**/plans/**/*.md", "**/*milestone*.md"]
+alwaysApply: false
+---
+
+# Requirement formats (ARO and User Story)
+
+Use these formats in milestone and plan **Requirements** sections so technical work and UX stay distinct and scannable.
+
+## ARO (Action, Result, Object)
+
+**Pattern:** three short segments in order: **action** → **result** → **object**.
+
+| Part | Meaning |
+|------|---------|
+| **Action** | Verb or short verb phrase: what must be done |
+| **Result** | Very short description of the outcome |
+| **Object** | Target system, artifact, or place the change applies |
+
+**When to use:** Technical and system requirements where there is **no** clear human persona (infrastructure, schemas, integration, orchestration internals).
+
+**How to write:** Keep each segment to a phrase or single clause. In markdown, label the three parts explicitly, for example:
+
+- **ARO:** **Action:** … **Result:** … **Object:** …
+
+**Examples:**
+
+- **ARO:** **Action:** Update mappings **Result:** to reflect registered tools **Object:** on the orchestration model.
+- **ARO:** **Action:** Provision a database **Result:** containing preset seed values **Object:** on application bootstrap.
+
+## User Story
+
+**Pattern:** `As a [persona] I want to [action] so that [outcome]`
+
+| Part | Meaning |
+|------|---------|
+| **Persona** | Who interacts with the system (see below) |
+| **Action** | Very brief description of what must happen |
+| **Outcome** | The benefit the persona gets |
+
+**When to use:** Describing **user experience (UX)** and human goals so requirements stay customer-centric.
+
+**How to write:** One sentence. No extra sub-clauses unless essential.
+
+**Examples:**
+
+- As an **Analyst**, I want to **start a new conversation** so that **I can describe my problem**.
+- As an **Admin**, I want to **reset user passwords** so that **I can unblock my team**.
+
+## Personas for user stories
+
+Prefer personas from `.cursor/rules/personas.mdc`: **Analysts**, **Agents**, and **Knowledge Admins** (use the singular form in the sentence: “As an Analyst…”, “As an Agent…”, “As a Knowledge Admin…”).
+
+For **platform or user-management** stories (accounts, enrollment, password lifecycle) where no other persona fits, **Admin** is acceptable.
+
+## Guardrails
+
+- Keep each requirement **short** (one ARO line or one user story per bullet).
+- Use **known personas** in user stories; do not invent ad-hoc persona names.
+- Do not mix ARO and user story in the same bullet—use separate bullets when both views matter.

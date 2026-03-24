@@ -18,19 +18,7 @@ A clear statement of the problem the milestone addresses.
 
 ### 2. Requirements
 
-Requirements may be written in two formats:
-
-**ARO** — Action, Result, Object:
-- **Action** — What will be done (usually a verb)
-- **Result** — The outcome
-- **Object** — Where the change is done
-
-Example: *Update schema definitions for books table*
-
-**User Story** — The usual format:
-- As [persona] I want to [action] so that [benefit]
-
-User stories **must reference existing personas** (Analysts, Agents, Knowledge Admins) where applicable.
+Requirements may be written as **ARO** or **User Story** entries. Definitions, when to use each, examples, and guardrails are in `.cursor/rules/requirement-formats.mdc`.
 
 ### 3. Work Breakdown Structure (optional)
 
