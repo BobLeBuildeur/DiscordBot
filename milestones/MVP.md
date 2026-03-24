@@ -18,7 +18,7 @@ The MVP must turn that validated experience into something **deployable**, **mul
 
 ### Tools (agent actions)
 
-- **ARO:** **Action:** Register and invoke tools **Result:** outputs flow back into session context **Object:** orchestration runtime and adapters.
+- **ARO:** Register and invoke tools with outputs flowing back into session context for orchestration runtime and adapters.
 - **User Story:** As an **Analyst**, I want agents to **use approved tools in a session** so that **my work is grounded beyond chat**.
 - **User Story:** As an **Agent**, I want a **bounded tool surface** so that **I complete tasks predictably**.
 
@@ -26,8 +26,8 @@ The MVP must turn that validated experience into something **deployable**, **mul
 
 ### User management
 
-- **ARO:** **Action:** Verify usernames and passwords **Result:** salted slow-hash checks and issued sessions **Object:** user management service and auth APIs.
-- **ARO:** **Action:** Bootstrap master admin **Result:** secure first-admin path on deploy **Object:** bootstrap flow and user service.
+- **ARO:** Verify usernames and passwords with salted slow-hash checks and issued sessions for user management service and auth APIs.
+- **ARO:** Bootstrap master admin with a secure first-admin path on deploy for bootstrap flow and user service.
 - **User Story:** As an **Analyst**, I want to **sign in with my own account** so that **my sessions stay private to me**.
 - **User Story:** As an **Admin**, I want to **create and manage users** so that **my team avoids shared credentials**.
 
@@ -35,14 +35,15 @@ The MVP must turn that validated experience into something **deployable**, **mul
 
 ### Build stage
 
-- **ARO:** **Action:** Execute or dispatch Build work **Result:** observable progress and durable artifacts **Object:** orchestration and worker or job interfaces.
+- **ARO:** Execute or dispatch Build work producing observable progress and durable artifacts in orchestration and worker or job interfaces.
 - **User Story:** As an **Analyst**, I want **approved plans to run to execution** so that **I get delivered work from a plan**.
 
 **Won’t do:** Arbitrary code execution on analyst machines without sandboxing and policy; full RPA coverage of every backend system unless explicitly planned.
 
 ### Knowledge (Guidelines and SOPs)
 
-- **ARO:** **Action:** CRUD knowledge entities **Result:** auditable agent-readable Guidelines and SOPs **Object:** storage, APIs, and orchestration integration.
+- **ARO:** Create model describing knowledge for knowledge-service.
+- **ARO:** Expose CRUD for Guidelines and SOPs with auditable agent-readable content through storage, APIs, and orchestration integration.
 - **User Story:** As a **Knowledge Admin**, I want to **publish and update Guidelines and SOPs** so that **org standards stay current for agents and plans**.
 - **User Story:** As an **Analyst**, I want **agent outputs to follow documented SOPs** so that **I can use them in strict processes**.
 
@@ -50,11 +51,11 @@ The MVP must turn that validated experience into something **deployable**, **mul
 
 ### Non-functional: deployment strategy
 
-- **ARO:** **Action:** Package services, wire config/secrets, and document bring-up **Result:** operators reproduce environments without a dev laptop **Object:** containers, CI/CD, and runbooks.
+- **ARO:** Package services, wire config/secrets, and document bring-up so operators reproduce environments without a dev laptop using containers, CI/CD, and runbooks.
 
 ### Non-functional: design system
 
-- **ARO:** **Action:** Ship tokens, components, and usage docs **Result:** MVP UI stays consistent; new features reuse the library **Object:** frontend packages and contributor docs.
+- **ARO:** Ship tokens, components, and usage docs so MVP UI stays consistent and new features reuse the library in frontend packages and contributor docs.
 
 ## Work Breakdown Structure
 

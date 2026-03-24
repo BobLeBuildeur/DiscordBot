@@ -8,26 +8,23 @@ alwaysApply: false
 
 Use these formats in milestone and plan **Requirements** sections so technical work and UX stay distinct and scannable.
 
-## ARO (Action, Result, Object)
+## ARO (action, result, object)
 
-**Pattern:** three short segments in order: **action** → **result** → **object**.
+**Pattern:** one short line in order: `[action] [result] [object]` — no separate labels; write it as a single flowing phrase.
 
-| Part | Meaning |
-|------|---------|
-| **Action** | Verb or short verb phrase: what must be done |
-| **Result** | Very short description of the outcome |
-| **Object** | Target system, artifact, or place the change applies |
+- **action** — verb or couple of words: what needs to be done  
+- **result** — very short description of outcomes  
+- **object** — target or output (system, service, surface, or artifact)
 
 **When to use:** Technical and system requirements where there is **no** clear human persona (infrastructure, schemas, integration, orchestration internals).
 
-**How to write:** Keep each segment to a phrase or single clause. In markdown, label the three parts explicitly, for example:
-
-- **ARO:** **Action:** … **Result:** … **Object:** …
+**How to write:** Keep the whole line scannable; use natural connectors (“for”, “on”, “with”, “into”) so the three parts read as one requirement.
 
 **Examples:**
 
-- **ARO:** **Action:** Update mappings **Result:** to reflect registered tools **Object:** on the orchestration model.
-- **ARO:** **Action:** Provision a database **Result:** containing preset seed values **Object:** on application bootstrap.
+- **ARO:** Update mappings to reflect registered tools on the orchestration model.
+- **ARO:** Provision a database containing preset seed values on application bootstrap.
+- **ARO:** Create model describing knowledge for knowledge-service.
 
 ## User Story
 
