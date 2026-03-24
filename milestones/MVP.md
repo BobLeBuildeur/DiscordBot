@@ -18,45 +18,43 @@ The MVP must turn that validated experience into something **deployable**, **mul
 
 ### Tools (agent actions)
 
-- **ARO:** Extend orchestration so that **invoking a registered tool** is one of the actions the agent runtime can take, alongside LLM turns; **results** are fed back into session context; **objects** are the orchestration server (and any tool adapters), with explicit registration and guardrails.
-- **User story:** As an **Analyst**, I want agents to use approved tools during a session so that outputs are grounded in actions beyond chat (e.g. retrieval, structured transforms, or integrations we define in scope).
-- **User story:** As an **Agent** (system persona), I want a clear, bounded tool surface so that I can complete tasks predictably without ad-hoc side effects.
+- **ARO:** **Action:** Register and invoke tools **Result:** outputs flow back into session context **Object:** orchestration runtime and adapters.
+- **User Story:** As an **Analyst**, I want agents to **use approved tools in a session** so that **my work is grounded beyond chat**.
+- **User Story:** As an **Agent**, I want a **bounded tool surface** so that **I complete tasks predictably**.
 
 **Won’t do (for scoping later plans):** An unbounded marketplace of third-party tools without review; tools that bypass auth or tenant boundaries.
 
 ### User management
 
-- **ARO:** Provide **username/password authentication** with **salted password hashing** using a recognized slow hash (e.g. bcrypt, Argon2); **results** are secure credential verification and session or token issuance per chosen architecture; **objects** are a dedicated **user management service** and integrated API boundaries.
-- **ARO:** Bootstrap a **master admin** account (or equivalent secure bootstrap flow) so that **first deploy** has a controlled path to create admins; **results** are no unsecured default-internet admin; **objects** are deployment docs and the user service.
-- **User story:** As an **Analyst**, I want to sign in with my own account so that my projects and sessions are not shared with every other user on the instance.
-- **User story:** As a **master admin**, I want to create and manage users so that the organization can adopt the product without shared credentials.
+- **ARO:** **Action:** Verify usernames and passwords **Result:** salted slow-hash checks and issued sessions **Object:** user management service and auth APIs.
+- **ARO:** **Action:** Bootstrap master admin **Result:** secure first-admin path on deploy **Object:** bootstrap flow and user service.
+- **User Story:** As an **Analyst**, I want to **sign in with my own account** so that **my sessions stay private to me**.
+- **User Story:** As an **Admin**, I want to **create and manage users** so that **my team avoids shared credentials**.
 
 **Won’t do:** Full enterprise IdP (SAML/OIDC), fine-grained RBAC, or compliance certifications as mandatory MVP deliverables—those may follow once identity exists.
 
 ### Build stage
 
-- **ARO:** Implement the **Build** stage that the PoC documented as future scope—**executing or dispatching** work from an approved plan per product rules; **results** are observable progress and durable artifacts; **objects** are orchestration and any worker or job interfaces we add.
-- **User story:** As an **Analyst**, I want an approved plan to move into execution so that the product closes the loop from planning to delivered work, within defined boundaries.
+- **ARO:** **Action:** Execute or dispatch Build work **Result:** observable progress and durable artifacts **Object:** orchestration and worker or job interfaces.
+- **User Story:** As an **Analyst**, I want **approved plans to run to execution** so that **I get delivered work from a plan**.
 
 **Won’t do:** Arbitrary code execution on analyst machines without sandboxing and policy; full RPA coverage of every backend system unless explicitly planned.
 
 ### Knowledge (Guidelines and SOPs)
 
-- **ARO:** Introduce **knowledge entities** (e.g. Guidelines, SOPs) with **create/read/update** (and minimal lifecycle as needed); **results** are versioned or auditable content suitable for agent consumption; **objects** are storage, APIs, and orchestration integration points.
-- **User story:** As a **Knowledge Admin**, I want to publish and update Guidelines and SOPs so that agents and plans reflect organizational standards.
-- **User story:** As an **Analyst**, I want agent suggestions to respect documented SOPs so that outputs are usable in regulated or process-heavy environments.
+- **ARO:** **Action:** CRUD knowledge entities **Result:** auditable agent-readable Guidelines and SOPs **Object:** storage, APIs, and orchestration integration.
+- **User Story:** As a **Knowledge Admin**, I want to **publish and update Guidelines and SOPs** so that **org standards stay current for agents and plans**.
+- **User Story:** As an **Analyst**, I want **agent outputs to follow documented SOPs** so that **I can use them in strict processes**.
 
 **Won’t do:** A full enterprise CMS; opaque file dumps with no structure for agents to cite or retrieve.
 
 ### Non-functional: deployment strategy
 
-- **ARO:** Define and implement a **deployment strategy** (containers, environments, configuration, secrets handling, and minimal runbooks); **results** are that a qualified operator can deploy an instance for early users; **objects** are repo docs, CI/CD or build artifacts, and infrastructure-as-code or equivalent as chosen.
-- **Acceptance:** A new environment can be brought up following documented steps without relying on a developer’s laptop as the runtime.
+- **ARO:** **Action:** Package services, wire config/secrets, and document bring-up **Result:** operators reproduce environments without a dev laptop **Object:** containers, CI/CD, and runbooks.
 
 ### Non-functional: design system
 
-- **ARO:** Establish a **design system** (tokens, components, patterns) and **documentation** for how new UI should be built; **results** are consistent layout, typography, and interaction patterns across MVP screens; **objects** are the frontend package(s) and contributor-facing docs.
-- **Acceptance:** New features can reuse documented components instead of one-off styles.
+- **ARO:** **Action:** Ship tokens, components, and usage docs **Result:** MVP UI stays consistent; new features reuse the library **Object:** frontend packages and contributor docs.
 
 ## Work Breakdown Structure
 
