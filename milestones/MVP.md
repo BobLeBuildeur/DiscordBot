@@ -10,7 +10,7 @@ The MVP must turn that validated experience into something **deployable**, **mul
 
 - Analysts can use the product in a realistic multi-user setting with auditable sign-in and an administrative path to onboard users.
 - Agents can select and run approved tools as orchestration actions, not only LLM text generation.
-- Approved plans can progress into a **Build** stage that executes or dispatches work according to defined rules (scope to be bounded in implementation plans).
+- Approved plans can progress into a **Build** stage where an **LLM uses chain-of-thought reasoning** to execute the plan step by step, refine deliverables with confidence checks, and return a final report to the Analyst.
 - Knowledge Admins can maintain organizational knowledge (Guidelines, SOPs) that agents and workflows can reference consistently.
 - The stack can be **deployed** to serve early external users, and the **UI** follows a documented design system so the experience stays coherent as features grow.
 
@@ -35,10 +35,30 @@ The MVP must turn that validated experience into something **deployable**, **mul
 
 ### Build stage
 
-- **ARO:** Execute or dispatch Build work producing observable progress and durable artifacts in orchestration and worker or job interfaces.
-- **User Story:** As an **Analyst**, I want **approved plans to run to execution** so that **I get delivered work from a plan**.
+Build **executes an approved plan** by driving an **LLM with chain-of-thought reasoning** (explicit intermediate reasoning in the execution path, not a single opaque completion). The runtime keeps **full plan context** in scope for the model for the whole Build.
 
-**Won’t do:** Arbitrary code execution on analyst machines without sandboxing and policy; full RPA coverage of every backend system unless explicitly planned.
+**Execution model**
+
+1. **Plan context** — The LLM receives the approved plan (and relevant session context, e.g. prior clarifications) as grounding for every Build turn.
+2. **Per plan step** — For each step in order:
+   1. **Execute the step** — Follow the step instructions and **produce or update a deliverable** (document, structured output, or other artifact type defined in implementation plans).
+   2. **Self-critique** — The model proposes **what could make this better** (concrete improvements) together with a **confidence level** that the step’s deliverable is complete enough to proceed.
+   3. **Refine** — **Iterate on the deliverable** using that critique and confidence signal (and any prior sub-step outputs for the same plan step, as designed).
+   4. **Confidence gate** — If confidence is **below a configurable threshold**, return to (2.1) for that step and refine again; otherwise move on to the next plan step.
+3. **Completion** — After **all steps** finish, **report results to the user** (summary, links or copies of deliverables, and any caveats), aligned with streaming or polling patterns used elsewhere in the product.
+
+**Guardrails**
+
+- **Cap iterations:** Per-step refinement loops (and, if applicable, global Build retries) are **limited to a configurable maximum count** so execution cannot spin indefinitely when confidence stays low.
+- When max iterations is reached, **surface exhaustion to the user** (no silent stop).
+
+- **ARO:** Run Build with LLM chain-of-thought over approved plan context producing step deliverables and durable artifacts in orchestration and worker or job interfaces.
+- **ARO:** Drive per-step refine loop with “what could make this better,” confidence scores, configurable completion threshold, and configurable max iterations for orchestration Build state machine.
+- **ARO:** Emit final Build report to the client with outcomes per step after all steps complete for orchestration API and UX.
+- **User Story:** As an **Analyst**, I want **approved plans to run to execution** so that **I get delivered work from a plan**.
+- **User Story:** As an **Analyst**, I want **Build to show progress and a final summary** so that **I can trust and use the outputs**.
+
+**Won’t do:** Arbitrary unsandboxed code execution on analyst machines; full RPA coverage of every backend system unless explicitly planned.
 
 ### Knowledge (Guidelines and SOPs)
 
@@ -68,9 +88,10 @@ The MVP must turn that validated experience into something **deployable**, **mul
    2. APIs for authentication, bootstrap/master admin, and user CRUD for admins.
    3. Integrate protected routes in orchestration and/or API gateway as architecture dictates.
 3. **Build stage**
-   1. Specify Build inputs/outputs and how they attach to session and plan artifacts.
-   2. Implement execution or job dispatch within safety and observability bounds.
-   3. Surface Build status to the client (streaming or polling, aligned with existing patterns).
+   1. Specify Build inputs (approved plan, session context), deliverable types, and persistence of step artifacts.
+   2. Implement LLM-driven per-step execution with chain-of-thought, self-critique (“what could make this better”), confidence scoring, threshold loop, and **configurable max iterations** per step (or per Build).
+   3. Implement final user-facing Build report after all steps complete.
+   4. Surface Build status to the client (streaming or polling, aligned with existing patterns).
 4. **Knowledge**
    1. Model Guidelines and SOPs (metadata, body format, ownership).
    2. Admin and analyst-facing flows for authoring and publishing.
