@@ -135,6 +135,16 @@ function conversationHistoryToMessages(
 ): Message[] {
 	const out: Message[] = [];
 	let lastPlanIndex = -1;
+
+	/** Once another message is appended, the prior plan (if any) is no longer the last message → frozen. */
+	function freezePriorPlanIfPresent() {
+		if (out.length < 2) return;
+		const prior = out[out.length - 2];
+		if (prior.role === 'agent' && prior.kind === 'plan') {
+			prior.frozen = true;
+		}
+	}
+
 	for (const turn of history) {
 		const kind = typeof turn.kind === 'string' ? turn.kind : 'message';
 		const id = buildMessageId(out.length, turn.role, kind);
@@ -147,6 +157,7 @@ function conversationHistoryToMessages(
 				frozen: true,
 				inline_feedback: []
 			});
+			freezePriorPlanIfPresent();
 			if (
 				lastPlanIndex >= 0 &&
 				Array.isArray(turn.inline_feedback) &&
@@ -161,14 +172,16 @@ function conversationHistoryToMessages(
 				role: 'agent',
 				body: turn.content,
 				kind,
-				frozen: true,
+				frozen: isPlan ? false : true,
 				inline_feedback: []
 			});
+			freezePriorPlanIfPresent();
 			if (isPlan) {
 				lastPlanIndex = out.length - 1;
 			}
 		}
 	}
+
 	return out;
 }
 

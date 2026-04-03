@@ -2,6 +2,10 @@
 
 Analyst-facing web UI for the orchestration server. Built with **SvelteKit** and **Svelte 5 runes**.
 
+## Prerequisites
+
+- **Node.js 20.19+** (or 22.12+). Vite 7 and this toolchain use APIs that are not available on Node 18. Use [nvm](https://github.com/nvm-sh/nvm) or similar: `nvm install` / `nvm use` (see `.nvmrc` in this folder).
+
 ## Quick start
 
 ```bash

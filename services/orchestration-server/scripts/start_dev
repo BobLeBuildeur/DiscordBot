@@ -1,0 +1,24 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+SERVICE_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
+cd "${SERVICE_ROOT}"
+
+HOST="${HOST:-0.0.0.0}"
+PORT="${PORT:-8000}"
+
+if [[ -x "${SERVICE_ROOT}/.venv/bin/uvicorn" ]]; then
+  exec "${SERVICE_ROOT}/.venv/bin/uvicorn" backend.app:app --reload --host "${HOST}" --port "${PORT}"
+fi
+
+if command -v uvicorn >/dev/null 2>&1; then
+  exec uvicorn backend.app:app --reload --host "${HOST}" --port "${PORT}"
+fi
+
+echo "uvicorn not found. Create a venv and install deps, then retry:" >&2
+echo "  ${SERVICE_ROOT}/scripts/bootstrap_venv" >&2
+echo "  source ${SERVICE_ROOT}/scripts/activate_venv" >&2
+echo "  ${SERVICE_ROOT}/scripts/development" >&2
+exit 1

@@ -77,7 +77,7 @@ Each plan history item has:
 | State        | When                                                                                                                                                          | Behavior                                                                                                                                                                             |
 | ------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | **Editable** | The plan is the latest assistant output in the live session **and** the user has not yet sent a subsequent analyst message that completed a server round-trip | Text selection enabled; “+” to add feedback; each feedback row is **Editing** while the plan stays editable (see [Feedback component states](#feedback-component-states)).               |
-| **Frozen**   | Loaded from `GET` session, or after the user sends the next message and the stream completes                                                                  | **Default browser selection** on plan text (copy, highlight) works as usual. **No** “+” affordance and **no** new anchored comments. Existing feedback UI in **reading** state only. |
+| **Frozen**   | After the user sends the next message and the stream completes, or on `GET` session when the plan is **not** the last message in the transcript | **Default browser selection** on plan text (copy, highlight) works as usual. **No** “+” affordance and **no** new anchored comments. Existing feedback UI in **reading** state only. |
 
 
 **Note:** During streaming, treat the plan as editable only after `final` (or optionally allow selection on partial stream with clear UX—default to post-final for simplicity).
@@ -301,4 +301,8 @@ This section expands how `**FeedbackBlock`** (and its parent `**PlanHistoryItem*
 - **Ambiguous selections:** If the same substring appears multiple times in the plan, PoC may attach feedback to the first match or require disambiguation—call out in release notes. Ensure this gets added as a TODO in the code.
 - `**TODO(observability)`** in `openai_client.py` for metadata extraction remains unrelated; do not block this feature on it.
 - **True block-level anchors** (heading IDs, AST positions) for more stable commenting across edits.
+
+## Addendum — 2026-03-23
+
+**Session load (`GET`):** When mapping `conversation_history` to UI messages, each assistant `plan` item’s `frozen` flag is derived from transcript position. If the plan is the **last** message in the hydrated list, it is **editable** (`frozen: false`), matching the rule that the analyst has not yet sent a subsequent message after that plan. If the plan is **not** the last message, it is **frozen** (`frozen: true`). This aligns the “Editable vs frozen” table with reload: plans are not frozen on load merely because they came from `GET`; only plans that are no longer the latest turn are frozen.
 
