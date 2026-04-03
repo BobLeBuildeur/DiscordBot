@@ -7,6 +7,16 @@
 	const ANCHOR_GRID = 16;
 	const STACK_STEP = 44;
 
+	/**
+	 * Business rule: feedback panels are absolutely positioned at an anchor (same idea as the “+”).
+	 * Several comments can share one spot; if every panel used the same (left, top), they would fully
+	 * overlap and only the top one would be usable. We must offset overlapping panels so each stays readable.
+	 *
+	 * Logic: (1) Read this item’s anchor in plan-root coordinates (defaults if missing).
+	 * (2) Bucket anchors into a coarse grid (ANCHOR_GRID) so nearby pixels count as the same “spot.”
+	 * (3) peers = all feedback in that grid cell. (4) index = this item’s order among peers.
+	 * (5) Keep horizontal position at ax; add index * STACK_STEP to top so peers stack downward.
+	 */
 	function stackedOverlayPosition(
 		item: PlanInlineFeedback,
 		all: PlanInlineFeedback[]

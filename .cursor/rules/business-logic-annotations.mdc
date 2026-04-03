@@ -1,0 +1,48 @@
+---
+description: Annotate code with business-logic context for future maintainers
+globs: services/**
+alwaysApply: false
+---
+
+# Business logic annotations
+
+Applies when editing files under [`services/`](services/).
+
+When you add or change **non-trivial** behavior—especially domain rules, state transitions, API contracts, or anything that would surprise the next reader—**annotate the code with a concise description of the business logic**.
+
+## What to write
+
+- **Product and domain intent:** what rule is being enforced, for whom (e.g. analyst vs system), and what “correct” means in context.
+- **Invariants and edge cases:** ordering assumptions, “last message wins,” idempotency, or data that comes from the server vs client-only.
+- **Why this path exists:** link the code to the user-visible outcome (e.g. editable vs frozen plan on session reload).
+
+Prefer comments **above** the block, branch, or function they clarify—not scattered on every line.
+
+## What to avoid
+
+- Restating identifiers or syntax (“increment `i`”).
+- Long essays; keep comments short and accurate.
+- Obvious glue that already reads clearly from names and types.
+
+## Examples
+
+```typescript
+// ❌ Adds no business context
+messages.push(msg);
+
+// ✅ States the rule future readers must preserve
+// Trailing assistant plan stays editable until another turn is appended; any later turn freezes the prior plan.
+freezePriorPlanIfPresent();
+```
+
+```python
+# ❌ Restates what the line does, not the product rule
+# Load session from store
+session = store.load_session(session_id)
+
+# ✅ Ties the branch to orchestration semantics maintainers must keep
+# Refinement (plan_feedback) only applies when a plan already exists; otherwise this advance is normal user chat.
+message_kind = "plan_feedback" if session.current_plan_markdown else "user_message"
+```
+
+Agents and humans editing this repo should **default to adding** these notes when touching behavior; skipping them is only reasonable for trivial or purely mechanical edits.

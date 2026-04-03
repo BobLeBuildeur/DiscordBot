@@ -55,7 +55,6 @@
 	data-state={isReading ? 'reading' : 'editing'}
 	aria-label="Plan comment"
 >
-	<div class="feedback-quote">{feedback.quoted_text}</div>
 	{#if isReading}
 		<p class="feedback-reading">{feedback.comment}</p>
 	{:else}
@@ -83,14 +82,7 @@
 		width: 100%;
 		box-sizing: border-box;
 	}
-
-	.feedback-quote {
-		font-size: 0.78rem;
-		color: #4b5563;
-		margin-bottom: 0.35rem;
-		font-style: italic;
-	}
-
+	
 	.feedback-input {
 		display: block;
 		width: 100%;
