@@ -220,63 +220,75 @@
 </script>
 
 <div class="plan-history-item" data-frozen={frozen}>
-	<span class="role-label">Agent Plan</span>
-	<div class="plan-body-wrap">
-		<div
-			class="plan-body"
-			bind:this={planRoot}
-			role="document"
-			aria-label="Plan content"
-		>
-			{@html highlightedHtml}
-			{#if !frozen && showAddButton}
-				<button
-					type="button"
-					class="selection-add"
-					style={`left:${addButtonPos.x}px; top:${addButtonPos.y}px;`}
-					onclick={addFeedbackFromSelection}
-					aria-label="Add feedback for selection"
-				>
-					+
-				</button>
-			{/if}
-			{#each inlineFeedback as feedback (feedback.id)}
-				{@const pos = stackedOverlayPosition(feedback, inlineFeedback)}
-				<div
-					class="feedback-float"
-					style={`left:${pos.left}px; top:${pos.top}px;`}
-					role="group"
-					aria-label="Comment on selected plan text"
-				>
-					<FeedbackBlock
-						{feedback}
-						{frozen}
-						onUpdate={handleFeedbackUpdate}
-						onRemove={handleFeedbackRemove}
-					/>
-				</div>
-			{/each}
+	<div class="plan-history-item__inner">
+		<span class="role-label">Agent Plan</span>
+		<div class="plan-body-wrap">
+			<div
+				class="plan-body"
+				bind:this={planRoot}
+				role="document"
+				aria-label="Plan content"
+			>
+				{@html highlightedHtml}
+				{#if !frozen && showAddButton}
+					<button
+						type="button"
+						class="selection-add"
+						style={`left:${addButtonPos.x}px; top:${addButtonPos.y}px;`}
+						onclick={addFeedbackFromSelection}
+						aria-label="Add feedback for selection"
+					>
+						+
+					</button>
+				{/if}
+				{#each inlineFeedback as feedback (feedback.id)}
+					{@const pos = stackedOverlayPosition(feedback, inlineFeedback)}
+					<div
+						class="feedback-float"
+						style={`left:${pos.left}px; top:${pos.top}px;`}
+						role="group"
+						aria-label="Comment on selected plan text"
+					>
+						<FeedbackBlock
+							{feedback}
+							{frozen}
+							onUpdate={handleFeedbackUpdate}
+							onRemove={handleFeedbackRemove}
+						/>
+					</div>
+				{/each}
+			</div>
 		</div>
 	</div>
 </div>
 
 <style>
+	/* card on inner; outer row is full width — see .cursor/design/components.md */
 	.plan-history-item {
-		padding: 0.75rem 1rem;
-		border-radius: 6px;
-		margin-bottom: 0.5rem;
-		background-color: #f0f4f8;
-		border-left: 3px solid #4a90d9;
+		width: 100%;
+		margin-bottom: var(--spacing-1);
+		box-sizing: border-box;
+	}
+
+	.plan-history-item__inner {
+		max-width: min(var(--layout-container-max-width), 100%);
+		margin-inline: auto;
+		padding: var(--spacing-2) var(--spacing-3);
+		border-radius: var(--radius-1);
+		background-color: var(--bg-card);
+		color: var(--text-primary);
+		box-shadow: var(--shadow-1);
+		box-sizing: border-box;
 	}
 
 	.role-label {
 		display: block;
-		font-size: 0.75rem;
-		font-weight: 600;
+		font-size: var(--font-size-1);
+		font-weight: var(--font-weight-bold);
 		text-transform: uppercase;
 		letter-spacing: 0.04em;
-		margin-bottom: 0.35rem;
-		color: #666;
+		margin-bottom: var(--spacing-1);
+		color: var(--text-secondary);
 	}
 
 	.plan-body-wrap {
@@ -299,33 +311,40 @@
 		max-width: min(22rem, 92vw);
 	}
 
+	/* card + shadow.2 — see .cursor/design/components.md, tokens.md shadow.2 */
 	.selection-add {
 		position: absolute;
 		z-index: 15;
 		transform: translateY(-100%);
-		border: 1px solid #93c5fd;
-		background: #eff6ff;
-		color: #1d4ed8;
-		border-radius: 999px;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		padding: var(--spacing-1);
+		border: 1px solid var(--color-border);
+		background: var(--bg-card);
+		color: var(--color-primary);
+		border-radius: var(--radius-1);
+		box-shadow: var(--shadow-2);
 		width: 1.7rem;
 		height: 1.7rem;
-		font-weight: 700;
+		font-weight: var(--font-weight-bold);
 		cursor: pointer;
+		line-height: 1;
 	}
 
 	.plan-body :global(.feedback-highlight) {
-		background: #fde68a;
+		background: color-mix(in srgb, var(--color-warning) 42%, var(--color-surface));
 		padding: 0 0.05em;
-		border-radius: 2px;
+		border-radius: var(--radius-1);
 	}
 
 	.plan-body :global(pre) {
-		background: #1e1e2e;
-		color: #cdd6f4;
-		padding: 0.75rem 1rem;
-		border-radius: 4px;
+		background: var(--color-text-primary);
+		color: var(--color-surface);
+		padding: var(--spacing-2) var(--spacing-3);
+		border-radius: var(--radius-1);
 		overflow-x: auto;
-		font-size: 0.875rem;
+		font-size: var(--font-size-3);
 	}
 
 	.plan-body :global(code) {
@@ -338,38 +357,38 @@
 	}
 
 	.plan-body :global(code:not(pre code)) {
-		background: #e2e8f0;
+		background: color-mix(in srgb, var(--color-border) 55%, var(--color-surface));
 		padding: 0.1em 0.35em;
-		border-radius: 3px;
+		border-radius: var(--radius-1);
 	}
 
 	.plan-body :global(ul),
 	.plan-body :global(ol) {
-		padding-left: 1.5rem;
+		padding-left: var(--spacing-4);
 	}
 
 	.plan-body :global(blockquote) {
-		border-left: 3px solid #cbd5e1;
+		border-left: 3px solid var(--color-border);
 		margin-left: 0;
-		padding-left: 1rem;
-		color: #555;
+		padding-left: var(--spacing-3);
+		color: var(--text-secondary);
 	}
 
 	.plan-body :global(table) {
 		border-collapse: collapse;
 		width: 100%;
-		margin: 0.5rem 0;
+		margin: var(--spacing-1) 0;
 	}
 
 	.plan-body :global(th),
 	.plan-body :global(td) {
-		border: 1px solid #d1d5db;
-		padding: 0.4rem 0.6rem;
+		border: 1px solid var(--color-border);
+		padding: var(--spacing-1) var(--spacing-2);
 		text-align: left;
 	}
 
 	.plan-body :global(th) {
-		background: #e5e7eb;
-		font-weight: 600;
+		background: var(--color-background);
+		font-weight: var(--font-weight-bold);
 	}
 </style>

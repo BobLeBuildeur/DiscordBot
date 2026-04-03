@@ -10,20 +10,27 @@ Applies when editing the orchestration web UI (`services/orchestration-web`).
 
 ## Source of truth
 
-- **Design system:** repository root `design/` (tokens, typography, color, spacing, patterns, and any design docs or assets). Treat it as the only authority for visual language and UI primitives.
+- **Design system:** [`.cursor/design/`](.cursor/design/) (tokens, typography, color, spacing, and related design docs). Treat it as the only authority for visual language and UI primitives.
+- **CSS bridge:** [services/orchestration-web/src/lib/styles/tokens.css](services/orchestration-web/src/lib/styles/tokens.css) maps those tokens to `:root` custom properties. See also [.cursor/rules/design-tokens.mdc](.cursor/rules/design-tokens.mdc) when editing tokens or the bridge.
 - **Existing UI components:** prefer `services/orchestration-web/src/lib/components/` and any other shared UI modules already in this service before adding new files.
+
+## Token registry
+
+- Any **named** token used in the app must be **documented** in `.cursor/design/tokens.md` and **defined** in `tokens.css` in the **same change set** as the first use.
+- Components must reference foundation tokens via `var(--…)`; for tints and overlays use **`color-mix(in srgb, var(--color-…), …)`** (or the same with `--text-*` / `--bg-*`) from the foundation palette—do not add new named color tokens for one-off shades.
+- Do not add new literal hex/rgb or spacing values in component styles except inside `color-mix`/`rgba` expressions that only reference foundation CSS variables.
 
 ## Rules for the agent
 
 1. **Reuse first** — Build screens from existing Svelte components and established patterns. Do not duplicate the same markup or styling in multiple places when a shared component already exists or can be extended with a small, consistent API.
 2. **No new components without the user** — If the work requires a **new** `.svelte` component (or a new shared primitive), **stop and ask the user** for approval and naming/location before creating it. Do not add new components speculatively.
-3. **Colors and spacing via design tokens** — **Always** express color and spacing through the project’s design tokens (e.g. CSS custom properties, Tailwind/theme classes mapped to tokens, or shared constants generated from `design/`). Do **not** hardcode hex/rgb/hsl values, raw `px`/`rem` for spacing, or arbitrary numeric spacing in component styles. The only place for literal color or spacing values is where tokens are **defined** (token source files under `design/` or the app’s token bridge), not in individual components.
-4. **Typography and interaction** — Use type scales, motion, and interaction patterns from `design/` or styles already wired to those tokens. Avoid ad-hoc font stacks or one-off values that bypass the system. If a token is missing, ask the user instead of inventing a parallel scale.
+3. **Colors and spacing via design tokens** — **Always** express color and spacing through the project’s design tokens (CSS custom properties from `tokens.css`). Do **not** hardcode hex/rgb/hsl values, raw `px`/`rem` for spacing, or arbitrary numeric spacing in component styles. The only place for literal color or spacing values is where tokens are **defined** (`.cursor/design/` and `tokens.css`), not in individual components.
+4. **Typography and interaction** — Use type scales, motion, and interaction patterns from `.cursor/design/` or styles already wired to those tokens. Avoid ad-hoc font stacks or one-off values that bypass the system. If a token is missing, ask the user instead of inventing a parallel scale.
 5. **Layouts and routes** — Route and layout files (`routes/**/*.svelte`, `+layout.svelte`) should compose existing components and design tokens; the same reuse and approval rules apply when new UI structure is needed.
 
 ## Quick check before editing
 
 - Is this using existing components from `src/lib/components/` (or extending them)?
 - Are **colors and spacing** only referenced via design tokens (no hardcoded palette or spacing values in components)?
-- Does the rest of styling match `design/` (or global styles already wired to that system)?
+- Does the rest of styling match `.cursor/design/` (or global styles already wired to that system)?
 - If a new component is necessary, has the user explicitly agreed?

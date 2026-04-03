@@ -1,0 +1,69 @@
+/**
+ * Design tokens — mirrors .cursor/design/tokens.md (foundation only).
+ * Composed tints use color-mix() from these variables; do not add new hex here
+ * without a matching row in tokens.md.
+ */
+:root {
+	/* Foundation colors */
+	--color-primary: #2fb7b2;
+	--color-primary-light: #6fd3cf;
+	--color-background: #f5f7fa;
+	--color-surface: #ffffff;
+	--color-border: #e6eaf0;
+	--color-text-primary: #2e2e2e;
+	--color-text-secondary: #7a8599;
+	--color-success: #4caf50;
+	--color-warning: #f5a623;
+	--color-data-1: #4a90e2;
+	--color-data-2: #7fb3ff;
+
+	/* Semantic aliases (reference foundation only) */
+	--text-primary: var(--color-text-primary);
+	--text-secondary: var(--color-text-secondary);
+	--bg-app: var(--color-background);
+	--bg-card: var(--color-surface);
+	--bg-hover: var(--color-primary-light);
+	--bg-active: var(--color-primary-light);
+
+	/* Spacing */
+	--spacing-1: 8px;
+	--spacing-2: 12px;
+	--spacing-3: 16px;
+	--spacing-4: 24px;
+	--spacing-5: 32px;
+
+	/* Radii */
+	--radius-1: 6px;
+	--radius-2: 8px;
+
+	/* Elevation */
+	--shadow-1: 0 1px 3px rgba(0, 0, 0, 0.05);
+	--shadow-2: 0 4px 14px rgba(15, 23, 42, 0.12);
+
+	/* Typography */
+	--font-family: 'Inter', 'Roboto', sans-serif;
+	--font-weight-regular: 400;
+	--font-weight-medium: 500;
+	--font-weight-bold: 600;
+	--font-line-height: 1.4;
+	--font-size-1: 12px;
+	--font-size-2: 13px;
+	--font-size-3: 14px;
+	--font-size-4: 16px;
+	--font-size-5: 24px;
+	--font-size-6: 28px;
+
+	/* Layout grid — see .cursor/design/components.md (Grid) */
+	--layout-grid-columns: 12;
+	--layout-grid-gap: var(--spacing-4);
+	--layout-section-gap: var(--spacing-5);
+	--layout-container-max-width: calc(40 * var(--spacing-5));
+
+	/* Breakpoints (min-width); mobile-first base is 0px */
+	--breakpoint-mobile-lg: 480px;
+	--breakpoint-tablet: 640px;
+	--breakpoint-tablet-landscape: 768px;
+	--breakpoint-desktop: 1024px;
+	--breakpoint-desktop-lg: 1280px;
+	--breakpoint-desktop-xl: 1536px;
+}

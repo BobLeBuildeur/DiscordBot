@@ -56,20 +56,35 @@
 </div>
 
 <style>
+	/* Full-width grid; per-message width cap lives inside HistoryItem / PlanHistoryItem */
 	.history {
 		flex: 1;
 		overflow-y: auto;
-		padding: 1rem;
+		display: grid;
+		grid-template-columns: repeat(var(--layout-grid-columns), minmax(0, 1fr));
+		gap: var(--layout-grid-gap);
+		width: 100%;
+		padding-block: var(--spacing-3);
+		box-sizing: border-box;
+		align-content: start;
+	}
+
+	.history > :global(*) {
+		grid-column: 1 / -1;
 	}
 
 	.empty-hint {
-		color: #888;
+		max-width: min(var(--layout-container-max-width), 100%);
+		margin-inline: auto;
+		padding-inline: var(--spacing-3);
+		box-sizing: border-box;
+		color: var(--text-secondary);
 		text-align: center;
-		margin-top: 2rem;
+		margin-top: var(--spacing-4);
 		font-style: italic;
 	}
 
 	.empty-hint.error {
-		color: #b00020;
+		color: var(--color-warning);
 	}
 </style>

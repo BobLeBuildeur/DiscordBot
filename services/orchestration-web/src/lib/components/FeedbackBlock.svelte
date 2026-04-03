@@ -73,16 +73,14 @@
 
 <style>
 	.feedback-block {
-		padding: 0.45rem 0.6rem;
-		background: #f7fafc;
-		border-radius: 6px;
-		box-shadow: 0 4px 14px rgba(15, 23, 42, 0.12);
-		border: 1px solid #e2e8f0;
-		border-left: 3px solid #4a90d9;
+		padding: var(--spacing-1) var(--spacing-2);
+		background: var(--color-surface);
+		border-radius: var(--radius-1);
+		box-shadow: var(--shadow-1), 0 4px 14px color-mix(in srgb, var(--color-text-primary) 12%, transparent);
 		width: 100%;
 		box-sizing: border-box;
 	}
-	
+
 	.feedback-input {
 		display: block;
 		width: 100%;
@@ -90,25 +88,24 @@
 		resize: none;
 		overflow: hidden;
 		line-height: 1.35;
-		border: 1px solid #cbd5e1;
-		border-radius: 4px;
-		padding: 0.35rem 0.5rem;
+		border: none;
+		border-radius: var(--radius-1);
+		padding: var(--spacing-1);
 		font: inherit;
+		background: var(--color-background);
 	}
 
 	.feedback-input:focus {
 		outline: none;
-		border-color: #4a90d9;
-		box-shadow: 0 0 0 2px rgba(74, 144, 217, 0.2);
+		box-shadow: 0 0 0 2px color-mix(in srgb, var(--color-primary) 25%, transparent);
 	}
 
 	.feedback-reading {
 		margin: 0;
-		color: #374151;
+		color: var(--text-primary);
 		white-space: pre-wrap;
 	}
 	.feedback-block[data-state='reading'] {
-		background: #f8fafc;
-		border-left-color: #94a3b8;
+		background: color-mix(in srgb, var(--color-text-secondary) 6%, var(--color-surface));
 	}
 </style>
