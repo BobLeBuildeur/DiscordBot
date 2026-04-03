@@ -70,7 +70,7 @@
 	}
 
 	button:hover:not(:disabled) {
-		background: color-mix(in srgb, var(--color-primary) 88%, black);
+		background: color-mix(in srgb, var(--color-primary) 88%, var(--color-text-primary));
 	}
 
 	button:disabled {
