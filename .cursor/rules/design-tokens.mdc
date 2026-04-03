@@ -1,0 +1,22 @@
+---
+description: Keep design token documentation and the CSS bridge aligned
+globs:
+  - .cursor/design/**/*.md
+  - services/orchestration-web/src/lib/styles/tokens.css
+alwaysApply: false
+---
+
+# Design tokens (registry + bridge)
+
+Applies when editing [.cursor/design/](.cursor/design/) markdown or [services/orchestration-web/src/lib/styles/tokens.css](services/orchestration-web/src/lib/styles/tokens.css).
+
+## Authority
+
+1. **[.cursor/design/tokens.md](.cursor/design/tokens.md)** (and other `.cursor/design/*.md` token docs) is the **canonical registry**: token name, value, intent, usage.
+2. **`tokens.css`** implements that registry as `:root` CSS custom properties.
+
+## Rules
+
+- **Same change set:** When adding or renaming a token, update `tokens.md` (or the relevant `.cursor/design/*.md` file) **in the same commit/PR** as `tokens.css`. Do not add a new `--*` variable in `tokens.css` without a corresponding table row (unless you add the doc row immediately in the same change).
+- **Renames:** Updating a token name requires changes in `tokens.md`, `tokens.css`, and every `var(--…)` usage in `services/orchestration-web`.
+- **Components** must not introduce literal palette or spacing values except via `var(--…)`; literals belong only in the registry files above.

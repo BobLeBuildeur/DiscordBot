@@ -35,42 +35,42 @@
 <style>
 	.input-area {
 		display: flex;
-		gap: 0.5rem;
-		padding: 0.75rem 1rem;
-		border-top: 1px solid #e0e0e0;
-		background: #fafafa;
+		gap: var(--spacing-1);
+		padding: var(--spacing-2) var(--spacing-3);
+		border-top: 1px solid var(--color-border);
+		background: var(--color-background);
 	}
 
 	textarea {
 		flex: 1;
 		resize: vertical;
-		padding: 0.5rem 0.75rem;
-		border: 1px solid #ccc;
-		border-radius: 4px;
+		padding: var(--spacing-1) var(--spacing-2);
+		border: 1px solid var(--color-border);
+		border-radius: var(--radius-1);
 		font-family: inherit;
-		font-size: 0.95rem;
-		line-height: 1.4;
+		font-size: var(--font-size-3);
+		line-height: var(--font-line-height);
 	}
 
 	textarea:focus {
 		outline: none;
-		border-color: #4a90d9;
-		box-shadow: 0 0 0 2px rgba(74, 144, 217, 0.2);
+		border-color: var(--color-primary);
+		box-shadow: 0 0 0 2px color-mix(in srgb, var(--color-primary) 25%, transparent);
 	}
 
 	button {
 		align-self: flex-end;
-		padding: 0.5rem 1.25rem;
-		background: #4a90d9;
-		color: #fff;
+		padding: var(--spacing-1) var(--spacing-4);
+		background: var(--color-primary);
+		color: var(--color-surface);
 		border: none;
-		border-radius: 4px;
-		font-size: 0.95rem;
+		border-radius: var(--radius-1);
+		font-size: var(--font-size-3);
 		cursor: pointer;
 	}
 
 	button:hover:not(:disabled) {
-		background: #3a7bc8;
+		background: color-mix(in srgb, var(--color-primary) 88%, black);
 	}
 
 	button:disabled {

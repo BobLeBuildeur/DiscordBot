@@ -17,6 +17,7 @@
 | `color.data.1`         | `#4A90E2` | Data series primary   | Default color for charts and data visualizations. Ensures consistency across graphs. |
 | `color.data.2`         | `#7FB3FF` | Data series secondary | Used for secondary chart series. Maintains visual differentiation.                   |
 
+**Composition:** Tints, overlays, and code chrome should be built with `color-mix(in srgb, …)` (or equivalent) from these tokens in `tokens.css` or component styles—do not add new named color tokens for one-off shades.
 
 ## Spacing
 
@@ -35,13 +36,14 @@
 | `radius.1` | `6px` | Small radius   | Used for inputs and controls. Slight rounding for compact elements. |
 | `radius.2` | `8px` | Default radius | Used for cards and containers. Standard rounding across system.     |
 
-
 ## Elevation
 
 | Token      | Value                        | Intent           | Usage                                                            |
 | ---------- | ---------------------------- | ---------------- | ---------------------------------------------------------------- |
 | `shadow.1` | `0 1px 3px rgba(0,0,0,0.05)` | Subtle elevation | Used for cards and surfaces. Provides depth without distraction. |
+| `shadow.2` | `0 4px 14px rgba(15, 23, 42, 0.12)` | Emphasized elevation | Floating controls and elements that must read above `shadow.1` cards. |
 
+**Composition:** Focus rings and one-off depth may still use `color-mix` with foundation colors; prefer named shadow tokens when the pattern is reused.
 
 ## Typography
 
@@ -76,3 +78,9 @@
 | `bg.card`        | `color.surface`        | Card background role | Used for all surfaces and containers. Separates content.      |
 | `bg.hover`       | `color.primary.light`  | Hover background     | Used for hover states. Provides subtle interaction feedback.  |
 | `bg.active`      | `color.primary.light`  | Active background    | Used for selected states. Indicates current selection.        |
+
+---
+
+## Layout
+
+Grid columns, gutters, section spacing, container width, and **responsive breakpoints** are defined at the component layer in [components.md](components.md#grid) (`## Grid`). The CSS bridge exposes `layout.*` and `breakpoint.*` custom properties in [tokens.css](../../services/orchestration-web/src/lib/styles/tokens.css).
