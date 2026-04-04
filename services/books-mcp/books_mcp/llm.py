@@ -6,7 +6,20 @@ from typing import Any
 
 from openai import OpenAI
 
-from books_mcp.config import Settings
+from books_mcp.config import PACKAGE_ROOT, Settings
+
+
+def _heuristic_search_intent(user_text: str, max_words: int) -> str:
+    words = re.findall(r"\S+", user_text.strip())
+    if not words:
+        return ""
+    return " ".join(words[:max_words]).lower()
+
+
+def _load_search_intent_system_prompt(settings: Settings) -> str:
+    path = PACKAGE_ROOT / "prompts" / "search_intent.md"
+    raw = path.read_text(encoding="utf-8")
+    return raw.replace("{max_words}", str(settings.books_find_intent_max_words))
 
 
 def _extract_json_object(text: str) -> dict[str, Any]:
@@ -41,3 +54,34 @@ class BooksLLMClient:
         if not content:
             raise RuntimeError("Empty model response")
         return _extract_json_object(content)
+
+    def extract_search_intent(self, user_text: str) -> str:
+        """Return a short plain-text search intent (at most ``books_find_intent_max_words`` words).
+
+        Without ``OPENAI_API_KEY``, uses the first *N* words of *user_text* (lowercased).
+        """
+        s = self._settings
+        text = user_text.strip()
+        if not text:
+            return ""
+        if self._client is None:
+            return _heuristic_search_intent(text, s.books_find_intent_max_words)
+
+        system = _load_search_intent_system_prompt(s)
+        resp = self._client.chat.completions.create(
+            model=s.openai_model,
+            messages=[
+                {"role": "system", "content": system},
+                {"role": "user", "content": text},
+            ],
+            temperature=0.0,
+        )
+        content = resp.choices[0].message.content
+        if not content:
+            return _heuristic_search_intent(text, s.books_find_intent_max_words)
+
+        intent = " ".join(content.split())
+        words = intent.split()
+        if len(words) > s.books_find_intent_max_words:
+            intent = " ".join(words[: s.books_find_intent_max_words])
+        return intent.lower()

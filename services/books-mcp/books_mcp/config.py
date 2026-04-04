@@ -35,6 +35,19 @@ class Settings(BaseSettings):
         validation_alias="BOOKS_LOG_MIRROR_STDERR",
     )
 
+    books_find_stem_match_ratio: float = Field(
+        default=0.3,
+        ge=0.0,
+        le=1.0,
+        validation_alias="BOOKS_FIND_STEM_MATCH_RATIO",
+    )
+    books_find_intent_max_words: int = Field(
+        default=10,
+        ge=1,
+        le=10,
+        validation_alias="BOOKS_FIND_INTENT_MAX_WORDS",
+    )
+
 
 def get_settings() -> Settings:
     return Settings()

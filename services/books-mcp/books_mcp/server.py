@@ -127,16 +127,32 @@ def delete_book(book_name: str) -> str:
 
 @mcp.tool
 def find_books(query: str) -> str:
-    """Search books: title (stem) match then summary or tags match; returns JSON list of book names."""
-    log.info("find_books start query=%s query_len=%s", query, len(query))
+    """Search books: LLM (or heuristic) intent, then stem segment match ratio; returns JSON book names."""
     if log.isEnabledFor(logging.DEBUG):
-        log.debug("find_books query preview: %s", query[:200] + ("..." if len(query) > 200 else ""))
+        log.debug("find_books query preview: %s", query[:500] + ("..." if len(query) > 500 else ""))
     try:
-        names = find_book_names(settings.books_data_dir, query)
+        llm = _llm()
+        intent = llm.extract_search_intent(query)
+        log.info(
+            "find_books query=%s intent=%s stem_match_ratio_threshold=%s",
+            query,
+            intent,
+            settings.books_find_stem_match_ratio,
+        )
+        names = find_book_names(
+            settings.books_data_dir,
+            intent,
+            ratio_threshold=settings.books_find_stem_match_ratio,
+        )
     except Exception:
         log.exception("find_books failed query=%s", query)
         raise
-    log.info("find_books success query=%s count=%s", query, len(names))
+    log.info(
+        "find_books success query=%s intent=%s count=%s",
+        query,
+        intent,
+        len(names),
+    )
     return json.dumps(names)
 
 

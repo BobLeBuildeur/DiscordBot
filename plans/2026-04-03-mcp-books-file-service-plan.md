@@ -313,3 +313,13 @@ This amendment extends the on-disk schema and generator behavior without changin
 - **Frontmatter** may include **`tags`**: a YAML list of short keyword strings. Legacy files that omit `tags` are treated as **`tags: []`** when read.
 - **Generators** (`write_book` / knowledge and SOP prompts) and **revise** (`update_book`) require a non-empty **`tags`** array in the LLM JSON output, and instruct the model to **end the `summary` line with related keywords** (e.g. after an em dash or a `Related:` clause) so the description stays scannable and aligned with tags.
 - **`find_books` stage B** matches the query against the **`summary`** (case-insensitive substring) **or** any **tag** string, in addition to unchanged stage A (filename stem) behavior.
+
+---
+
+## Amendment (2026-04-03): `find_books` intent LLM + stem match ratio
+
+This supersedes substring-based `find_books` behavior described in earlier amendments for that tool.
+
+- **`find_books`** first derives a short **search intent** (max 10 words by default) via an LLM using [`services/books-mcp/prompts/search_intent.md`](services/books-mcp/prompts/search_intent.md), or—if **`OPENAI_API_KEY`** is missing—the first *N* words of the user query (heuristic).
+- Books are ranked only by the **kebab-case filename stem**: intent tokens are matched against hyphen-separated segments; a book is included if the fraction of matched segments is **strictly greater than** **`BOOKS_FIND_STEM_MATCH_RATIO`** (default **0.3**). **Summary** and **tags** are not used in this filter.
+- Semantic/synonym matching is **out of scope**; stems and intent must align lexically (with optional prefix overlap for longer tokens).

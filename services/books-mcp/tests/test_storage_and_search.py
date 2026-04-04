@@ -2,8 +2,19 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
+
+from books_mcp.llm import BooksLLMClient
 from books_mcp.search import find_book_names
 from books_mcp.storage import BookFrontmatter, parse_book_file, write_book_file
+
+# Default product threshold: match plan / config default.
+_RATIO = 0.3
+
+
+def _minimal_book(tmp_path: Path, stem: str) -> None:
+    fm = BookFrontmatter(type="knowledge", summary="summary", tags=["tag"])
+    write_book_file(tmp_path, stem, fm, "body\n")
 
 
 def test_parse_roundtrip(tmp_path: Path) -> None:
@@ -17,64 +28,65 @@ def test_parse_roundtrip(tmp_path: Path) -> None:
     assert "Body" in body
 
 
-def test_find_books_two_stage(tmp_path: Path) -> None:
-    # Same query must match stem (stage A) and summary (stage B).
-    fm = BookFrontmatter(type="knowledge", summary="acme operations reporting pipeline")
-    write_book_file(
-        tmp_path,
-        "acme-handbook-for-teams-with-enough-words-in-title-here-now-today",
-        fm,
-        "x",
-    )
-    fm2 = BookFrontmatter(type="knowledge", summary="unrelated")
-    write_book_file(
-        tmp_path,
-        "other-handbook-for-teams-with-enough-words-in-title-here-now-today",
-        fm2,
-        "y",
-    )
-
-    q = "acme"
-    names = find_book_names(tmp_path, q)
-    assert "acme-handbook-for-teams-with-enough-words-in-title-here-now-today" in names
-    assert "other-handbook-for-teams-with-enough-words-in-title-here-now-today" not in names
+def test_find_books_acme_short_stem(tmp_path: Path) -> None:
+    """Intent token matches a high fraction of short stems."""
+    _minimal_book(tmp_path, "acme-guide")
+    _minimal_book(tmp_path, "other-guide")
+    names = find_book_names(tmp_path, "acme", ratio_threshold=_RATIO)
+    assert names == ["acme-guide"]
 
 
-def test_find_books_stage_a_passes_stage_b_fails(tmp_path: Path) -> None:
-    """Stem matches (stage A) but summary does not contain the query (stage B) — book is dropped."""
-    fm = BookFrontmatter(
-        type="knowledge",
-        summary="Onboarding checklist with no shared token from the filename",
-    )
-    write_book_file(
-        tmp_path,
-        "shared-token-guide-for-new-hires-with-enough-words-in-stem-here",
-        fm,
-        "body",
-    )
-    names = find_book_names(tmp_path, "shared-token")
+def test_find_books_ratio_below_threshold_dropped(tmp_path: Path) -> None:
+    """Many segments, one token: ratio can fall at or below threshold."""
+    _minimal_book(tmp_path, "x-y-z-w-a-b-c-d-e-f")
+    names = find_book_names(tmp_path, "x", ratio_threshold=_RATIO)
     assert names == []
 
 
-def test_find_books_title_only_no_summary_match(tmp_path: Path) -> None:
-    fm = BookFrontmatter(type="knowledge", summary="something else entirely")
-    write_book_file(tmp_path, "foo-bar-baz-qux-quux-corge", fm, "x")
-    names = find_book_names(tmp_path, "foo")
-    assert names == []
+def test_extract_search_intent_heuristic_without_api_key(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    from books_mcp.config import Settings
+
+    s = Settings(openai_api_key=None)
+    client = BooksLLMClient(s)
+    # .env or the environment may still supply a key; force offline heuristic for this unit test.
+    client._client = None  # noqa: SLF001
+    assert client.extract_search_intent("How to build a house") == "how to build a house"
 
 
-def test_find_books_tag_match_when_summary_misses(tmp_path: Path) -> None:
-    """Stage A passes (stem contains query); summary does not, but a tag does."""
-    fm = BookFrontmatter(
-        type="knowledge",
-        summary="Onboarding checklist with no shared token from the filename",
-        tags=["partner-acme-link", "widgets"],
+# --- Explicit matrix (intents simulate LLM output from user text) ---
+
+
+def test_example_how_to_build_a_house(tmp_path: Path) -> None:
+    _minimal_book(tmp_path, "build-a-house")
+    assert "build-a-house" in find_book_names(tmp_path, "build house", ratio_threshold=_RATIO)
+
+
+def test_example_paint_a_car_red(tmp_path: Path) -> None:
+    _minimal_book(tmp_path, "paint-car")
+    assert "paint-car" in find_book_names(tmp_path, "paint car red", ratio_threshold=_RATIO)
+
+
+def test_example_learn_to_sail_dingy_sailing_basics(tmp_path: Path) -> None:
+    _minimal_book(tmp_path, "sailing-basics")
+    assert "sailing-basics" in find_book_names(tmp_path, "sailing basics", ratio_threshold=_RATIO)
+
+
+def test_example_bake_a_cake_not_cook_a_meal(tmp_path: Path) -> None:
+    _minimal_book(tmp_path, "cook-a-meal")
+    assert find_book_names(tmp_path, "bake cake", ratio_threshold=_RATIO) == []
+
+
+def test_example_wedding_planning_guide(tmp_path: Path) -> None:
+    _minimal_book(tmp_path, "wedding-planning-guide")
+    assert "wedding-planning-guide" in find_book_names(
+        tmp_path, "wedding planning guide", ratio_threshold=_RATIO
     )
-    write_book_file(
-        tmp_path,
-        "acme-handbook-for-teams-with-enough-words-in-title-here-now-today",
-        fm,
-        "body",
-    )
-    names = find_book_names(tmp_path, "acme")
-    assert names == ["acme-handbook-for-teams-with-enough-words-in-title-here-now-today"]
+
+
+def test_example_wedding_intent_not_intimate_party_book(tmp_path: Path) -> None:
+    _minimal_book(tmp_path, "wedding-planning-guide")
+    _minimal_book(tmp_path, "instructions-on-intimate-party-setup")
+    names = find_book_names(tmp_path, "wedding planning guide", ratio_threshold=_RATIO)
+    assert "wedding-planning-guide" in names
+    assert "instructions-on-intimate-party-setup" not in names
