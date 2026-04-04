@@ -123,8 +123,17 @@ class PromptManager:
                 "",
                 "# Inline Plan Feedback",
                 self._format_inline_feedback(feedback),
+                "",
+                "# Organizational knowledge (matched books)",
+                self._organizational_knowledge(session),
             ]
         )
+
+    def _organizational_knowledge(self, session: SessionState) -> str:
+        chunks = [t.content for t in session.conversation_history if t.kind == "knowledge"]
+        if not chunks:
+            return "No organizational knowledge retrieved for this session."
+        return "\n\n".join(chunks)
 
     def _format_conversation(self, session: SessionState) -> str:
         if not session.conversation_history:
@@ -132,6 +141,8 @@ class PromptManager:
 
         lines: list[str] = []
         for turn in session.conversation_history:
+            if turn.kind == "knowledge":
+                continue
             role = "Analyst" if turn.role == TurnRole.USER else "Assistant"
             lines.append(f"- {role} ({turn.kind}) at {turn.created_at.isoformat()}: {turn.content}")
         return "\n".join(lines)

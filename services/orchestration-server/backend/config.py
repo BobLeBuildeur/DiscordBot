@@ -5,6 +5,7 @@ from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 SERVICE_ROOT = Path(__file__).resolve().parent.parent
+MONOREPO_ROOT = SERVICE_ROOT.parent.parent
 
 
 class Settings(BaseSettings):
@@ -22,6 +23,17 @@ class Settings(BaseSettings):
     data_root: Path = SERVICE_ROOT / "data" / "orchestrator"
     stream_chunk_size: int = Field(default=160, ge=1)
     cors_origins: str = "*"
+    monorepo_root: Path = Field(default=MONOREPO_ROOT, validation_alias="MONOREPO_ROOT")
+    mcp_registry_path: Path = Field(
+        default=SERVICE_ROOT / "config" / "mcp-registry.json",
+        validation_alias="MCP_REGISTRY_PATH",
+    )
+    orch_books_enrichment_max: int = Field(
+        default=5,
+        ge=0,
+        le=50,
+        validation_alias="ORCH_BOOKS_ENRICHMENT_MAX",
+    )
 
 
 @lru_cache

@@ -1,0 +1,12 @@
+{
+  "entries": [
+    {
+      "id": "books",
+      "enabled": true,
+      "enrichment": true,
+      "command": ["python3", "-m", "books_mcp"],
+      "cwd": "services/books-mcp",
+      "env": {}
+    }
+  ]
+}

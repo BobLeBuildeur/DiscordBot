@@ -5,6 +5,8 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SERVICE_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 VENV_DIR="${SERVICE_ROOT}/.venv"
+# Sibling service in monorepo: services/books-mcp (resolved after SERVICE_ROOT exists)
+BOOKS_MCP_ROOT="${SERVICE_ROOT}/../books-mcp"
 
 if ! command -v python3 >/dev/null 2>&1; then
   echo "python3 is required to bootstrap the virtual environment." >&2
@@ -36,10 +38,32 @@ source "${VENV_DIR}/bin/activate"
 python -m pip install --upgrade pip
 python -m pip install -e "${SERVICE_ROOT}[dev]"
 
+BOOKS_INSTALLED=0
+# Install sibling books-mcp into the same venv so MCP stdio can use this interpreter
+# (configure mcp-registry.json command to "${VENV_DIR}/bin/python" -m books_mcp).
+if [[ -f "${BOOKS_MCP_ROOT}/pyproject.toml" ]]; then
+  echo "Installing books-mcp (editable) into this venv..."
+  python -m pip install -e "${BOOKS_MCP_ROOT}[dev]"
+  BOOKS_INSTALLED=1
+else
+  echo "Skipping books-mcp: ${BOOKS_MCP_ROOT}/pyproject.toml not found." >&2
+fi
+
+BOOKS_HINT=""
+if [[ "${BOOKS_INSTALLED}" -eq 1 ]]; then
+  BOOKS_HINT="
+MCP books server: books-mcp is installed here. Point config/mcp-registry.json at:
+  ${VENV_DIR}/bin/python
+with args: -m books_mcp
+(and cwd services/books-mcp relative to the monorepo root, as in the sample registry).
+"
+fi
+
 cat <<EOF
 Virtual environment is ready at:
   ${VENV_DIR}
 
+Orchestration server and dev dependencies are installed (editable).${BOOKS_HINT}
 Activate it with:
   source "${SERVICE_ROOT}/scripts/activate_venv"
 EOF

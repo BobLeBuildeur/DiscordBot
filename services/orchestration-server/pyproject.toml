@@ -9,6 +9,7 @@ description = "Agentic orchestrator PoC service"
 requires-python = ">=3.11"
 dependencies = [
   "fastapi>=0.116.0",
+  "mcp>=1.0",
   "openai>=1.109.0",
   "pydantic>=2.11.0",
   "pydantic-settings>=2.10.0",

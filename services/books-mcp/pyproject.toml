@@ -1,0 +1,22 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "books-mcp"
+version = "0.0.0"
+description = "MCP server for file-backed knowledge books (scaffold)"
+requires-python = ">=3.11"
+dependencies = [
+  "fastmcp>=2.0",
+  "mcp>=1.0",
+  "openai>=1.0",
+  "pydantic-settings>=2.10.0",
+  "pyyaml>=6.0",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8.4.0", "ruff>=0.12.0"]
+
+[tool.setuptools.packages.find]
+include = ["books_mcp*"]
