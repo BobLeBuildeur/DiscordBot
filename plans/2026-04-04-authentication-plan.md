@@ -61,7 +61,7 @@ Inventory for implementation. **New** = add file; **Modify** = change existing f
 | `services/auth-service/auth_service/validation.py` (or inline in models) | New | Sanitized types / helpers: login body, user JSON schema, max lengths, strip dangerous characters. |
 | `services/auth-service/auth_service/users.py` | New | Username normalization; **fast hash → filename** (e.g. SHA-256 hex + `.json`); load/parse JSON user record (`username`, `password_hash`, `created_at`) with **validated, sanitized fields**. |
 | `services/auth-service/auth_service/app.py` | New | FastAPI app: CORS, `POST` login route, `GET` health, wire security + users; **validated** request bodies only. |
-| `services/auth-service/scripts/create_user.py` (or similar) | New | Operator CLI: create JSON user file (`username`, `password_hash`, `created_at`) under `AUTH_USERS_DIR`. |
+| `auth-create-user` (console script → `auth_service.cli`) | New | Operator CLI: create JSON user file (`username`, `password_hash`, `created_at`) under `AUTH_USERS_DIR`. |
 | `services/auth-service/tests/conftest.py` | New | Temp `AUTH_USERS_DIR`, test `JWT_SIGNING_SECRET`, `TestClient` app fixture. |
 | `services/auth-service/tests/test_security.py` | New | Unit tests: hash verify, JWT claims/exp, HS256 signature check. |
 | `services/auth-service/tests/test_api.py` | New | API tests: login success/failure, malformed body, health. |
@@ -107,7 +107,7 @@ Base URL is the deployed origin of `services/auth-service` (e.g. `http://localho
    - `JWT_EXPIRES_DAYS` — default `30`, parsed as days (or `JWT_EXPIRES_SECONDS` if sub-day TTL needed later).
    - `AUTH_PASSWORD_PEPPER` (optional) — global secret combined with hashing if required by security review.
    - `AUTH_BIND_HOST` / `AUTH_PORT` or `UVICORN_*` as per convention.
-3. **User file format:** One file per user, **JSON only** (e.g. `{digest}.json`). **Filename:** normalize username (trim, lowercase; email-shaped), then compute a **fast** digest—e.g. **SHA-256** of the UTF-8 string, **hex** output—and use `{digest}.json`. Document the exact algorithm in README so login and `create_user` stay in sync. **Required JSON fields:**
+3. **User file format:** One file per user, **JSON only** (e.g. `{digest}.json`). **Filename:** normalize username (trim, lowercase; email-shaped), then compute a **fast** digest—e.g. **SHA-256** of the UTF-8 string, **hex** output—and use `{digest}.json`. Document the exact algorithm in README so login and `auth-create-user` stay in sync. **Required JSON fields:**
    - **`username`** — string, normalized email-shaped identifier (same string used for filename hash input).
    - **`password_hash`** — string, **salted** password hash only (e.g. Argon2id or bcrypt full digest—no plaintext passwords).
    - **`created_at`** — creation **date/time** (ISO 8601 string in UTC recommended, e.g. `2026-04-04T12:00:00Z`).
@@ -124,14 +124,14 @@ Base URL is the deployed origin of `services/auth-service` (e.g. `http://localho
    - **Password (plaintext at verify time):** Treat as opaque UTF-8 bytes/string with max length only—no HTML/log echo of raw password.
    - **Filesystem:** Build paths **only** as `join(AUTH_USERS_DIR, f"{hex_digest}.json")` using **your own** hex digest from the normalized username—never concatenate raw user input into paths.
    - **User JSON loaded from disk:** After `json.load`, validate types (`username`/`password_hash`/`created_at` are strings of bounded length); **`password_hash`** must match expected hash string charset (e.g. bcrypt/argon prefix); parse **`created_at`** strictly (ISO 8601) or reject file; reject extra keys only if you choose strict schema—document choice.
-   - **CLI (`create_user`):** Apply the **same** normalization and length rules as login for username; read passwords safely (no argv logging); optional stdin with confirm for production scripts.
+   - **CLI (`auth-create-user`):** Apply the **same** normalization and length rules as login for username; read passwords safely (no argv logging); optional stdin with confirm for production scripts.
 3. Responses: `200` with `{ "access_token": "<jwt>", "token_type": "bearer" }` (or similar); `401` for bad credentials; `422` for malformed body; `500` only for unexpected errors (no stack traces in responses).
 4. **CORS:** If orchestration-web calls this service directly from the browser, enable CORS for known origins (mirror orchestration-server’s pattern from `backend/config.py` / env) or document that the browser must use a same-origin proxy instead.
 5. **Health:** `GET /health` (or `/healthz`) for orchestration/load checks (no user-controlled input).
 
 ### 3. User bootstrap (operator workflow)
 
-1. Add a small **CLI** or documented **one-off script** under `services/auth-service/scripts/` to create a user file: inputs email + password (stdin or args), normalize username, derive filename via the **same fast hash** as runtime, compute salted `password_hash`, set `created_at` to now, write `{digest}.json` with **`username`**, **`password_hash`**, **`created_at`**. Alternatively document manual JSON creation with a helper command—prefer script to avoid mistakes.
+1. Ship a **CLI** (e.g. `auth-create-user` → `auth_service.cli`) to create a user file: inputs email + password (stdin or args), normalize username, derive filename via the **same fast hash** as runtime, compute salted `password_hash`, set `created_at` to now, write `{digest}.json` with **`username`**, **`password_hash`**, **`created_at`**. Alternatively document manual JSON creation with a helper command—prefer script to avoid mistakes.
 2. Document in service README: **never** commit real user files; `.gitignore` the users directory.
 
 ### 4. Orchestration-server (explicit non-changes)

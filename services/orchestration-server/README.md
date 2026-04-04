@@ -20,6 +20,8 @@ Base path: `/orchestrator`
 
 Interactive docs: `GET /docs` (Swagger UI) when the server is running.
 
+**Authentication (PoC):** **orchestration-web** may send `Authorization: Bearer <jwt>` on requests. This service **does not validate** that header in the current milestone; callers are assumed to be authenticated by an upstream reverse proxy or gateway when deployed.
+
 ## Configuration
 
 Environment variables are read via [Pydantic Settings](https://docs.pydantic.dev/latest/concepts/pydantic_settings/). Common options:

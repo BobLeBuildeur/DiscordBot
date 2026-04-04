@@ -1,4 +1,5 @@
 import { PUBLIC_ORCHESTRATION_API_URL } from '$env/static/public';
+import { getAccessToken } from '$lib/auth/token.js';
 import type {
 	Message,
 	SessionEvent,
@@ -8,6 +9,13 @@ import type {
 } from './types.js';
 
 const BASE = PUBLIC_ORCHESTRATION_API_URL ?? '';
+
+function orchestrationAuthHeaders(): Record<string, string> {
+	const t = getAccessToken();
+	if (!t) return {};
+	// Orchestration-server ignores this header in the current PoC; sent for future inbound-plane JWT checks.
+	return { Authorization: `Bearer ${t}` };
+}
 
 interface SSECallbacks {
 	onSession?: (data: SessionEvent) => void;
@@ -19,7 +27,10 @@ interface SSECallbacks {
 async function streamSSE(url: string, body: Record<string, unknown>, callbacks: SSECallbacks): Promise<void> {
 	const response = await fetch(url, {
 		method: 'POST',
-		headers: { 'Content-Type': 'application/json' },
+		headers: {
+			'Content-Type': 'application/json',
+			...orchestrationAuthHeaders()
+		},
 		body: JSON.stringify(body)
 	});
 
@@ -186,7 +197,9 @@ function conversationHistoryToMessages(
 }
 
 export async function getSession(sessionId: string): Promise<Message[]> {
-	const response = await fetch(`${BASE}/orchestrator/sessions/${sessionId}`);
+	const response = await fetch(`${BASE}/orchestrator/sessions/${sessionId}`, {
+		headers: { ...orchestrationAuthHeaders() }
+	});
 	if (!response.ok) {
 		const text = await response.text();
 		throw new Error(`API error ${response.status}: ${text}`);

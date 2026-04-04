@@ -8,6 +8,10 @@ export default defineConfig({
 			'/orchestrator': {
 				target: 'http://localhost:8000',
 				changeOrigin: true
+			},
+			'/auth': {
+				target: 'http://localhost:8090',
+				changeOrigin: true
 			}
 		}
 	}
