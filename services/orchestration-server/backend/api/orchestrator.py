@@ -8,7 +8,7 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
 from backend.orchestrator.engine import OrchestratorEngine
-from backend.orchestrator.models import PlanInlineFeedbackItem
+from backend.orchestrator.models import PlanInlineFeedbackItem, SessionState
 
 router = APIRouter(prefix="/orchestrator", tags=["orchestrator"])
 
@@ -24,6 +24,14 @@ class SessionMessageRequest(BaseModel):
 
 def get_engine(request: Request) -> OrchestratorEngine:
     return request.app.state.orchestrator_engine
+
+
+def session_payload_for_client(session: SessionState) -> dict[str, object]:
+    data = session.model_dump(mode="json")
+    history = data.get("conversation_history")
+    if isinstance(history, list):
+        data["conversation_history"] = [h for h in history if h.get("kind") != "knowledge"]
+    return data
 
 
 def _sse_event(event: str, payload: dict[str, object]) -> str:
@@ -77,4 +85,4 @@ def get_session(
     engine: Annotated[OrchestratorEngine, Depends(get_engine)],
 ) -> dict[str, object]:
     session = engine.get_session(session_id)
-    return session.model_dump(mode="json")
+    return session_payload_for_client(session)

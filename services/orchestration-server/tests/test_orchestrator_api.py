@@ -4,13 +4,17 @@ import json
 
 from fastapi.testclient import TestClient
 
+from backend.api.orchestrator import session_payload_for_client
 from backend.app import create_app
 from backend.orchestrator.engine import OrchestratorEngine
 from backend.orchestrator.models import (
     GeneratedResponse,
     NextAction,
     PromptResponseMetadata,
+    SessionState,
     StateCheck,
+    TurnRecord,
+    TurnRole,
 )
 from backend.orchestrator.prompts import PromptManager
 from backend.orchestrator.store import FileBackedSessionStore
@@ -44,6 +48,27 @@ def _build_test_client(test_settings, llm_client: FakeLLMClient) -> TestClient:
         llm_client,
     )
     return TestClient(create_app(settings=test_settings, engine=engine))
+
+
+def test_get_session_payload_omits_knowledge_turns() -> None:
+    session = SessionState(problem_statement="Plan onboarding")
+    session.conversation_history.append(
+        TurnRecord(role=TurnRole.USER, kind="problem_statement", content="Plan onboarding")
+    )
+    session.conversation_history.append(
+        TurnRecord(role=TurnRole.ASSISTANT, kind="knowledge", content="book excerpts")
+    )
+    session.conversation_history.append(
+        TurnRecord(
+            role=TurnRole.ASSISTANT,
+            kind="follow_up_questions",
+            content="Who is the audience?",
+        )
+    )
+    payload = session_payload_for_client(session)
+    kinds = [t["kind"] for t in payload["conversation_history"]]
+    assert "knowledge" not in kinds
+    assert "follow_up_questions" in kinds
 
 
 def _parse_sse(text: str) -> dict[str, list[dict[str, object]]]:
@@ -117,7 +142,9 @@ def test_api_streams_session_and_persists_final_state(test_settings):
         "POST",
         f"/orchestrator/sessions/{session_id}/messages",
         json={
-            "message": ("The audience is operations leadership and success means faster approvals."),
+            "message": (
+                "The audience is operations leadership and success means faster approvals."
+            ),
             "plan_inline_feedback": [
                 {
                     "quoted_text": "Draft the workflow.",
@@ -139,4 +166,5 @@ def test_api_streams_session_and_persists_final_state(test_settings):
     session_payload = session_response.json()
     assert session_payload["latest_state_check"]["next_action"] == "create_plan"
     assert session_payload["current_plan_markdown"].startswith("## Goal")
-    assert session_payload["conversation_history"][-2]["inline_feedback"][0]["quoted_text"] == "Draft the workflow."
+    quoted = session_payload["conversation_history"][-2]["inline_feedback"][0]["quoted_text"]
+    assert quoted == "Draft the workflow."

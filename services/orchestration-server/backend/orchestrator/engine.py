@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from dataclasses import dataclass
 from typing import Iterable
 
@@ -52,11 +52,14 @@ class OrchestratorEngine:
         store: FileBackedSessionStore,
         prompt_manager: PromptManager,
         llm_client: LLMClient,
+        session_enrichment: Callable[[SessionState], None] | None = None,
     ) -> None:
         self.settings = settings
         self.store = store
         self.prompt_manager = prompt_manager
         self.llm_client = llm_client
+        # Runs after the initial user turn is persisted on new sessions, before state check.
+        self._session_enrichment = session_enrichment
 
     def start_session(self, problem_statement: str) -> OrchestrationResult:
         session_id: str | None = None
@@ -84,6 +87,9 @@ class OrchestratorEngine:
             {"turn": initial_turn.model_dump(mode="json")},
         )
         self.store.save_session(session)
+        if self._session_enrichment is not None:
+            self._session_enrichment(session)
+            self.store.save_session(session)
         yield from self._stream_turn(session, problem_statement)
 
     def advance_session(

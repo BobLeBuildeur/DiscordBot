@@ -4,6 +4,7 @@ from backend.orchestrator.engine import OrchestratorEngine
 from backend.orchestrator.models import (
     GeneratedResponse,
     NextAction,
+    PlanInlineFeedbackItem,
     PromptResponseMetadata,
     StateCheck,
 )
@@ -154,10 +155,10 @@ def test_engine_generates_and_refines_plan_with_latest_plan_in_context(test_sett
         session_id,
         "Refine it for executive review and add approval criteria.",
         [
-            {
-                "quoted_text": "Create the first plan.",
-                "comment": "Make this explicitly for executive stakeholders.",
-            }
+            PlanInlineFeedbackItem(
+                quoted_text="Create the first plan.",
+                comment="Make this explicitly for executive stakeholders.",
+            )
         ],
     )
     assert third_turn.assistant_turn.kind == "plan"

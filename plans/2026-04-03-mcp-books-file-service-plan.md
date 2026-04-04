@@ -41,6 +41,7 @@ Add a **new monorepo service** that runs a **Model Context Protocol (MCP) server
 - **Writable directory** for books, e.g. `BOOKS_DATA_DIR` defaulting to something like `services/books-mcp/data/books/` for local dev (gitignored).
 - **Optional:** `BOOKS_MAX_CONTENT_CHARS` (or equivalent) default **1000** for `write_book` / `update_book` persisted body length after sanitization.
 - Monorepo layout: implementation lives under **`services/books-mcp/`** (or `services/mcp-books/`—pick one name and keep all code there).
+- **Virtual environment:** Install the service’s **`pyproject.toml`** / dependencies into a **dedicated venv** (e.g. `python3.11 -m venv .venv` in `services/books-mcp/`, then `pip install -e ".[dev]"`). Do **not** rely on system-wide `pip install` for the books MCP package or orchestration coupling; document the same in **`services/books-mcp/README.md`**. The committed **`services/books-mcp/Dockerfile`** installs the package into **`/opt/venv`** (a venv inside the image) via `pip install .`, not onto the base image’s global interpreter.
 - **Orchestration integration:** `services/orchestration-server/` must add the **MCP Python SDK / client** capable of STDIO transport to subprocess MCP servers, subprocess management, and (if not already present) FastAPI **lifespan** for startup discovery.
 - **Orchestration enrichment:** Configurable cap on books pulled into prompts (**default: 5**), e.g. `ORCH_BOOKS_ENRICHMENT_MAX`.
 
@@ -55,6 +56,27 @@ Add a **new monorepo service** that runs a **Model Context Protocol (MCP) server
 - **Prompt templates** — markdown files under `services/books-mcp/prompts/generators/` (or similar), one per type, plus shared fragments if needed.
 - **`pytest`**, **`ruff`** — tests and lint.
 - **Orchestration:** MCP **client** (STDIO subprocess + handshake) for registry discovery and enrichment calls; **FastAPI lifespan** for startup.
+- **Docker:** **`services/books-mcp/Dockerfile`** builds a runnable image for the books MCP process; use it for consistent runtime and CI (see [Virtual environment and Docker](#virtual-environment-and-docker)).
+
+---
+
+## Virtual environment and Docker
+
+### Local development
+
+- Create a **virtual environment** under `services/books-mcp/` (e.g. **`.venv`**, gitignored) and install the package in **editable** mode so imports and prompts resolve predictably.
+- Point `mcp-registry.json` (orchestration) **`command`** at the venv’s interpreter when spawning STDIO locally, e.g. `["/path/to/services/books-mcp/.venv/bin/python", "-m", "books_mcp"]`, or use an equivalent wrapper script that activates the venv.
+
+### Container image
+
+- **`services/books-mcp/Dockerfile`** uses **`python:3.11-slim-bookworm`**, creates **`/opt/venv`**, runs **`pip install .`** so the **books_mcp** package and its dependencies live **only inside that venv** (`ENV PATH=/opt/venv/bin:$PATH`).
+- **Build:** `docker build -t books-mcp:latest services/books-mcp` (from repo root).
+- **Run:** MCP over **STDIO** requires attaching stdin/stdout, e.g. `docker run -i --rm` with **`OPENAI_API_KEY`**, **`BOOKS_DATA_DIR`** (default in Dockerfile: `/data/books`), and a **volume** for persistent markdown files.
+- **`.dockerignore`** excludes local venvs, caches, and `data/` so the image stays small and reproducible.
+
+### Orchestration registry
+
+- For production or compose stacks, registry **`command`** can reference **`docker run -i ... books-mcp:latest`** with the same env/volume contract, or the venv `python` path on the host—document whichever the operator chooses.
 
 ---
 
@@ -179,8 +201,9 @@ Wire the orchestration server so it can **list configured MCPs**, **discover cap
 1. **Scaffold service**
    1.1. Create `services/books-mcp/` with package layout (`src/` or flat module—match repo conventions).
    1.2. Add `pyproject.toml` or `requirements.txt` with pinned **`mcp`**, **FastMCP**, **PyYAML** (or chosen YAML lib), **pytest**, **ruff**.
-   1.3. Add `README.md`: STDIO run command, env vars (`BOOKS_DATA_DIR`, `BOOKS_MAX_CONTENT_CHARS`, `OPENAI_API_KEY`, etc.).
-   1.4. Add `.gitignore` for `data/`, `__pycache__/`, venv; reuse or symlink monorepo ruff config if applicable.
+   1.3. Add **`README.md`**: **venv** workflow (`python -m venv .venv`, `pip install -e ".[dev]"`), STDIO run command using **`python -m books_mcp`** from that venv, env vars (`BOOKS_DATA_DIR`, `BOOKS_MAX_CONTENT_CHARS`, `OPENAI_API_KEY`, etc.).
+   1.4. Add **`.gitignore`** for `data/`, `__pycache__/`, `.venv/` / `venv/`; reuse or symlink monorepo ruff config if applicable.
+   1.5. Add **`Dockerfile`** at `services/books-mcp/Dockerfile` installing the package into **`/opt/venv`**, plus **`.dockerignore`**; document **`docker build`** / **`docker run -i`** in the README (see [Virtual environment and Docker](#virtual-environment-and-docker)).
 
 2. **Storage module**
    2.1. Resolve `BOOKS_DATA_DIR` at startup; create directory if missing.
@@ -270,6 +293,7 @@ Wire the orchestration server so it can **list configured MCPs**, **discover cap
 - **Quality:** Run `ruff check` and `pytest` before merge; add at least one test per tool and one for search ordering.
 - **MVP knowledge principle:** Avoid opaque dumps—generators must produce **structured, labeled** markdown (especially for `sop`).
 - **Orchestration:** MCP registry JSON must stay **reviewable** (PR-visible); discovery failures degrade gracefully; **never** leak silent `knowledge` turns to HTTP or SSE user-visible fields.
+- **Packaging:** Local dev and CI use a **venv** or the **Dockerfile**’s **`/opt/venv`**; pin dependencies in **`pyproject.toml`** so Docker and laptop installs stay aligned.
 
 ---
 
