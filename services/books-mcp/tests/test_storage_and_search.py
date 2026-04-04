@@ -2,8 +2,6 @@ from __future__ import annotations
 
 from pathlib import Path
 
-import pytest
-
 from books_mcp.search import find_book_names
 from books_mcp.storage import BookFrontmatter, parse_book_file, write_book_file
 

@@ -6,7 +6,6 @@ from books_mcp.validation import (
     assert_valid_book_name,
     enforce_max_length,
     sanitize_text,
-    slugify_phrase,
     validate_slug_word_count,
 )
 

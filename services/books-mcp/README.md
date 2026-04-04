@@ -32,6 +32,13 @@ Attach stdin/stdout for MCP clients. Override `BOOKS_DATA_DIR` and mount a volum
 | `OPENAI_API_KEY` | (none) | Required for LLM-backed write/update |
 | `BOOKS_OPENAI_MODEL` | `gpt-4.1-mini` | Model for generation |
 | `BOOKS_OPENAI_TIMEOUT` | `120` | OpenAI request timeout (seconds) |
+| `BOOKS_LOG_PATH` | `<package>/data/logs/books-mcp.log` | Rotating log file path (parent dirs created on startup) |
+| `BOOKS_LOG_LEVEL` | `INFO` | Set `DEBUG` for verbose tool traces (lengths/previews; not full LLM payloads) |
+| `BOOKS_LOG_MAX_BYTES` | `5242880` | Max size per log file before rotation (~5 MiB) |
+| `BOOKS_LOG_BACKUP_COUNT` | `3` | Number of rotated backups to keep |
+| `BOOKS_LOG_MIRROR_STDERR` | `true` | When true, **WARNING** and **ERROR** also go to stderr (INFO/DEBUG stay file-only so MCP stdout stays protocol-clean) |
+
+Logs are written under the service `data/` tree (gitignored by default). Do not point log output at stdout when using STDIO transport.
 
 ## `find_books` search
 
