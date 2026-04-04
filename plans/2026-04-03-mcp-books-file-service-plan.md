@@ -28,8 +28,8 @@ Add a **new monorepo service** that runs a **Model Context Protocol (MCP) server
 
 ## Relationship to milestones
 
-- **`milestones/MVP.md` — Knowledge:** The books MCP plus orchestration **read-path** integration (registry, discovery, silent enrichment) advances “Guidelines and SOPs” that agents can **retrieve** in-session. **Admin authoring UX** and a dedicated **HTTP CRUD API** remain follow-ups.
-- **`milestones/MVP.md` — Tools:** The orchestration server maintains a **committed JSON registry** of MCPs, runs **discovery on startup**, and invokes the books MCP for **enrichment** on session creation **before** generation prompts (**including** the first **problem-understanding** turn when routed there)—establishing a concrete tool/MCP pattern for later expansion.
+- **`milestones/2026-04-03-mvp.md` — Knowledge:** The books MCP plus orchestration **read-path** integration (registry, discovery, silent enrichment) advances “Guidelines and SOPs” that agents can **retrieve** in-session. **Admin authoring UX** and a dedicated **HTTP CRUD API** remain follow-ups.
+- **`milestones/2026-04-03-mvp.md` — Tools:** The orchestration server maintains a **committed JSON registry** of MCPs, runs **discovery on startup**, and invokes the books MCP for **enrichment** on session creation **before** generation prompts (**including** the first **problem-understanding** turn when routed there)—establishing a concrete tool/MCP pattern for later expansion.
 
 ---
 
