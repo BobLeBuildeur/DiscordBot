@@ -40,8 +40,16 @@ Attach stdin/stdout for MCP clients. Override `BOOKS_DATA_DIR` and mount a volum
 
 Logs are written under the service `data/` tree (gitignored by default). Do not point log output at stdout when using STDIO transport.
 
+## Book frontmatter
+
+Each `*.md` file starts with YAML frontmatter:
+
+- **`type`:** `knowledge` or `sop`
+- **`summary`:** short description; generators are instructed to **end the summary with related keywords** (e.g. after `—` or `Related:`) for quick scanning
+- **`tags`:** list of short keywords (optional on disk for legacy files; omitted or empty means `[]`). New books from `write_book` include non-empty tags.
+
 ## `find_books` search
 
 1. **Stage A:** file stems whose kebab-case name contains the query (case-insensitive substring), or the query with spaces replaced by hyphens.
-2. **Stage B:** among those, keep only books whose frontmatter `summary` contains the query (case-insensitive).
+2. **Stage B:** among those, keep only books whose frontmatter **`summary` or any `tags` entry** contains the query (case-insensitive substring).
 3. If stage A is empty, the result is empty (no summary-only fallback).

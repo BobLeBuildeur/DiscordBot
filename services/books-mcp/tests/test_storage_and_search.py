@@ -13,6 +13,7 @@ def test_parse_roundtrip(tmp_path: Path) -> None:
     out_fm, body = parse_book_file(raw)
     assert out_fm.type == "knowledge"
     assert out_fm.summary == "About widgets"
+    assert out_fm.tags == []
     assert "Body" in body
 
 
@@ -60,3 +61,20 @@ def test_find_books_title_only_no_summary_match(tmp_path: Path) -> None:
     write_book_file(tmp_path, "foo-bar-baz-qux-quux-corge", fm, "x")
     names = find_book_names(tmp_path, "foo")
     assert names == []
+
+
+def test_find_books_tag_match_when_summary_misses(tmp_path: Path) -> None:
+    """Stage A passes (stem contains query); summary does not, but a tag does."""
+    fm = BookFrontmatter(
+        type="knowledge",
+        summary="Onboarding checklist with no shared token from the filename",
+        tags=["partner-acme-link", "widgets"],
+    )
+    write_book_file(
+        tmp_path,
+        "acme-handbook-for-teams-with-enough-words-in-title-here-now-today",
+        fm,
+        "body",
+    )
+    names = find_book_names(tmp_path, "acme")
+    assert names == ["acme-handbook-for-teams-with-enough-words-in-title-here-now-today"]

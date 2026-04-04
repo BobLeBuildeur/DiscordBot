@@ -5,7 +5,7 @@ import tempfile
 from pathlib import Path
 
 import yaml
-from pydantic import BaseModel
+from pydantic import BaseModel, Field, field_validator
 
 from books_mcp.validation import assert_valid_book_name, sanitize_text
 
@@ -13,6 +13,14 @@ from books_mcp.validation import assert_valid_book_name, sanitize_text
 class BookFrontmatter(BaseModel):
     type: str
     summary: str
+    tags: list[str] = Field(default_factory=list)
+
+    @field_validator("tags", mode="before")
+    @classmethod
+    def _coerce_tags(cls, value: object) -> object:
+        if value is None:
+            return []
+        return value
 
 
 def safe_book_path(data_root: Path, book_name: str) -> Path:

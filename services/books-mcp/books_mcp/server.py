@@ -26,7 +26,10 @@ settings.books_data_dir.mkdir(parents=True, exist_ok=True)
 
 mcp = FastMCP(
     "books-mcp",
-    instructions="File-backed knowledge and SOP books with YAML frontmatter (type, summary).",
+    instructions=(
+        "File-backed knowledge and SOP books with YAML frontmatter "
+        "(type, summary ending with related keywords, tags)."
+    ),
 )
 
 
@@ -50,7 +53,7 @@ def write_book(
         path = safe_book_path(settings.books_data_dir, gen.book_name)
         if path.exists():
             raise ValueError(f"Book already exists: {gen.book_name}")
-        fm = BookFrontmatter(type=type, summary=gen.summary)
+        fm = BookFrontmatter(type=type, summary=gen.summary, tags=gen.tags)
         write_book_file(settings.books_data_dir, gen.book_name, fm, gen.body_markdown)
     except ValueError as e:
         log.warning("write_book: %s", e)
@@ -58,7 +61,12 @@ def write_book(
     except Exception:
         log.exception("write_book failed")
         raise
-    log.info("write_book success book_name=%s path=%s", gen.book_name, path)
+    log.info(
+        "write_book success book_name=%s path=%s tag_count=%s",
+        gen.book_name,
+        path,
+        len(gen.tags),
+    )
     return json.dumps({"book_name": gen.book_name, "path": str(path)})
 
 
@@ -76,15 +84,16 @@ def update_book(book_name: str, feedback: str) -> str:
         raw = read_book_raw(settings.books_data_dir, book_name)
         fm, body = parse_book_file(raw)
         llm = _llm()
-        new_summary, new_body = revise_book(
+        new_summary, new_body, new_tags = revise_book(
             llm,
             settings,
             book_type=fm.type,
             current_summary=fm.summary,
+            current_tags=fm.tags,
             body=body,
             feedback=feedback,
         )
-        new_fm = BookFrontmatter(type=fm.type, summary=new_summary)
+        new_fm = BookFrontmatter(type=fm.type, summary=new_summary, tags=new_tags)
         write_book_file(settings.books_data_dir, book_name, new_fm, new_body)
     except FileNotFoundError:
         log.warning("update_book not found: %s", book_name)
@@ -118,7 +127,7 @@ def delete_book(book_name: str) -> str:
 
 @mcp.tool
 def find_books(query: str) -> str:
-    """Search books: title (stem) match then summary match; returns JSON list of book names."""
+    """Search books: title (stem) match then summary or tags match; returns JSON list of book names."""
     log.info("find_books start query=%s query_len=%s", query, len(query))
     if log.isEnabledFor(logging.DEBUG):
         log.debug("find_books query preview: %s", query[:200] + ("..." if len(query) > 200 else ""))

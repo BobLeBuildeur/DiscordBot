@@ -303,3 +303,13 @@ Wire the orchestration server so it can **list configured MCPs**, **discover cap
 - **Auth / tenant isolation** if books are ever multi-customer.
 - **Audit log** of writes/deletes if compliance requires it (**state pillar** extension).
 - Additional types beyond `knowledge` and `sop` via new generator + prompt + enum extension.
+
+---
+
+## Amendment (2026-04-03): Tags and summary keywords
+
+This amendment extends the on-disk schema and generator behavior without changing the high-level goals of the plan.
+
+- **Frontmatter** may include **`tags`**: a YAML list of short keyword strings. Legacy files that omit `tags` are treated as **`tags: []`** when read.
+- **Generators** (`write_book` / knowledge and SOP prompts) and **revise** (`update_book`) require a non-empty **`tags`** array in the LLM JSON output, and instruct the model to **end the `summary` line with related keywords** (e.g. after an em dash or a `Related:` clause) so the description stays scannable and aligned with tags.
+- **`find_books` stage B** matches the query against the **`summary`** (case-insensitive substring) **or** any **tag** string, in addition to unchanged stage A (filename stem) behavior.

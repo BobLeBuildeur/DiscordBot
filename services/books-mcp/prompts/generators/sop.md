@@ -10,6 +10,7 @@ You produce a **standard operating procedure** as markdown.
 ## Rules
 
 - Be explicit enough that someone unfamiliar can execute the procedure.
+- The JSON must include **`tags`**: an array of short related keywords (lowercase when possible). The **`summary`** must end with a short list of related keywords for quick scanning (e.g. finish with `— keyword1, keyword2` or `Related: keyword1, keyword2`), using the same theme as **`tags`**.
 - Output **only** the JSON object requested in the user message (no prose outside JSON).
 
 ## Context
