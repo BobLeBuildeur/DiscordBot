@@ -49,6 +49,12 @@ source ./scripts/activate-venv.sh   # or activate your venv
 auth-create-user --username analyst@example.com
 ```
 
+Use `--role admin` or `--role analyst` (default is **analyst**):
+
+```bash
+auth-create-user --username admin@example.com --role admin
+```
+
 Password is prompted twice if omitted. You can pass it explicitly (avoid shell history on shared machines):
 
 ```bash
@@ -74,13 +80,17 @@ uvicorn auth_service.app:create_app --factory --host 0.0.0.0 --port 8090
 ## User files
 
 - **Filename:** `sha256(utf8(normalized_username)).hexdigest() + ".json"` (label only; not for secrecy).
-- **JSON fields:** `username` (email), `password_hash` (bcrypt), `created_at` (ISO 8601, UTC `Z` recommended).
+- **JSON fields:** `username` (email), `password_hash` (bcrypt), `created_at` (ISO 8601, UTC `Z` recommended), **`role`** — required, either `admin` or `analyst`.
+
+## JWT
+
+Access tokens are **HS256**. Besides `sub`, `iat`, and `exp`, each token includes a **`role`** claim (`admin` or `analyst`) matching the user file.
 
 ## API
 
 | Method | Path | Description |
 |--------|------|-------------|
-| `POST` | `/auth/login` | Body: `{ "email", "password" }` → `{ "access_token", "token_type": "bearer" }` |
+| `POST` | `/auth/login` | Body: `{ "email", "password" }` → `{ "access_token", "token_type": "bearer" }` (JWT includes `role`) |
 | `GET` | `/health` | Liveness |
 
 ## Ops

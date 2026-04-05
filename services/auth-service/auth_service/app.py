@@ -5,6 +5,7 @@ from pathlib import Path
 
 from fastapi import APIRouter, FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from pydantic import ValidationError
 
 from auth_service.config import Settings, get_settings
 from auth_service.security import create_access_token, verify_password
@@ -43,7 +44,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             record = load_user_record(path)
         except json.JSONDecodeError as e:
             raise HTTPException(status_code=500, detail="User record unreadable") from e
-        except ValueError as e:
+        except (ValueError, ValidationError) as e:
             raise HTTPException(status_code=401, detail="Invalid credentials") from e
 
         if record is None:
@@ -53,7 +54,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         if not verify_password(body.password, record.password_hash, resolved.auth_password_pepper):
             raise HTTPException(status_code=401, detail="Invalid credentials")
 
-        token = create_access_token(normalized, resolved)
+        token = create_access_token(normalized, record.role, resolved)
         return {"access_token": token, "token_type": "bearer"}
 
     app = FastAPI(title="Auth service", version="0.1.0")

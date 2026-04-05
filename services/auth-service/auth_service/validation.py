@@ -4,8 +4,16 @@ from __future__ import annotations
 
 import re
 from datetime import datetime
+from enum import Enum
 
 from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
+
+
+class UserRole(str, Enum):
+    """Application role stored on disk and mirrored in JWT."""
+
+    admin = "admin"
+    analyst = "analyst"
 
 MAX_EMAIL_LEN = 254
 MAX_PASSWORD_LEN = 1024
@@ -54,6 +62,7 @@ class UserRecord(BaseModel):
     username: EmailStr
     password_hash: str = Field(..., min_length=1, max_length=MAX_HASH_STRING_LEN)
     created_at: str = Field(..., min_length=1, max_length=MAX_CREATED_AT_LEN)
+    role: UserRole
 
     @field_validator("username")
     @classmethod

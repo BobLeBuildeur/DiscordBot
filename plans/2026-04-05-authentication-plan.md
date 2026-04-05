@@ -1,5 +1,9 @@
 # Authentication (auth service + orchestration-web)
 
+## Amendment (2026-04-05)
+
+- **Roles:** Each user has a required **`role`** persisted in the on-disk JSON (`admin` or `analyst`). On successful login, the **HS256** JWT includes the same value as the private claim **`role`** (alongside `sub`, `iat`, `exp`). The `auth-create-user` CLI accepts **`--role`** with default **`analyst`**. User files **must** include **`role`**; there is no migration shim for records without it—treat the store as authoritative; invalid or incomplete records fail validation at load and login does not succeed.
+
 ## Goal
 
 Deliver end-to-end **sign-in for Analysts** using a dedicated **HTTP authentication service** that validates email-form usernames and passwords against **hashed credentials on disk**, returns **JWTs** with configurable lifetime, and wire **orchestration-web** so users without a valid token are sent to a **login** flow. **Orchestration-server** remains unchanged: it does not verify auth; any caller is assumed to have been authenticated by an **inbound plane** (reverse proxy, API gateway, mesh, etc.)—that deployment concern stays out of scope for this milestone.
@@ -8,9 +12,9 @@ Deliver end-to-end **sign-in for Analysts** using a dedicated **HTTP authenticat
 
 - Auth service exposes a documented login endpoint; valid credentials yield a JWT; invalid credentials yield a clear error without leaking which field failed.
 - **All external inputs** to the auth service (HTTP bodies, values read from user JSON files, CLI args/stdin) are **sanitized and validated** before use—see Steps (reject or normalize unsafe data; bounded lengths; no path traversal).
-- User records live as **one JSON file per user** on disk; each **filename** is derived from a **fast, deterministic hash** of the normalized username (email)—for **filesystem-safe, fixed-length names** only, not a security control. Each file **must** include **`username`**, **`password_hash`** (salted password hash from Argon2/bcrypt or equivalent—full encoded string), and **`created_at`** (account creation timestamp).
+- User records live as **one JSON file per user** on disk; each **filename** is derived from a **fast, deterministic hash** of the normalized username (email)—for **filesystem-safe, fixed-length names** only, not a security control. Each file **must** include **`username`**, **`password_hash`** (salted password hash from Argon2/bcrypt or equivalent—full encoded string), **`created_at`** (account creation timestamp), and **`role`** (`admin` or `analyst`).
 - Passwords are **hashed with salt** (see Steps for how env “salt/pepper” maps to the chosen algorithm).
-- JWTs are signed with **HS256** (HMAC-SHA-256); signing secret and password-stretching secrets come from **environment variables**; default JWT TTL is **30 days**, overridable by env.
+- JWTs are signed with **HS256** (HMAC-SHA-256); signing secret and password-stretching secrets come from **environment variables**; default JWT TTL is **30 days**, overridable by env. Access tokens include claim **`role`** matching the user file.
 - Orchestration-web: unauthenticated visitors are **redirected to login**; login collects **email + password** with client-side validation (**email format**, password **≥ 8 alphanumeric characters**); all HTTP auth concerns go through an **adapter** so the UI can swap backends later.
 - Orchestration-web **attaches the JWT** to every **orchestration-server** API call (`Authorization: Bearer …`) when a token is present (**Step 8**). **Orchestration-server does not read or validate this header in this milestone**—the behavior is **future-proofing** for an inbound plane or later server-side auth.
 - Tests cover auth hashing/verification and critical API behavior; web tests or E2E smoke as appropriate for the stack.
@@ -57,11 +61,11 @@ Inventory for implementation. **New** = add file; **Modify** = change existing f
 | `services/auth-service/.gitignore` | New | User data dir, `.env`, `__pycache__`, venv, etc. |
 | `services/auth-service/auth_service/__init__.py` | New | Package marker. |
 | `services/auth-service/auth_service/config.py` | New | Load settings from environment (paths, secrets, TTL, CORS origins). |
-| `services/auth-service/auth_service/security.py` | New | Password hashing/verification (Argon2id/bcrypt + optional pepper), JWT creation (**HS256**). |
-| `services/auth-service/auth_service/validation.py` (or inline in models) | New | Sanitized types / helpers: login body, user JSON schema, max lengths, strip dangerous characters. |
-| `services/auth-service/auth_service/users.py` | New | Username normalization; **fast hash → filename** (e.g. SHA-256 hex + `.json`); load/parse JSON user record (`username`, `password_hash`, `created_at`) with **validated, sanitized fields**. |
+| `services/auth-service/auth_service/security.py` | New | Password hashing/verification (Argon2id/bcrypt + optional pepper), JWT creation (**HS256**) including **`role`** claim. |
+| `services/auth-service/auth_service/validation.py` (or inline in models) | New | Sanitized types / helpers: login body, user JSON schema (including **`role`**: `admin` \| `analyst`), max lengths, strip dangerous characters. |
+| `services/auth-service/auth_service/users.py` | New | Username normalization; **fast hash → filename** (e.g. SHA-256 hex + `.json`); load/parse JSON user record (`username`, `password_hash`, `created_at`, `role`) with **validated, sanitized fields**. |
 | `services/auth-service/auth_service/app.py` | New | FastAPI app: CORS, `POST` login route, `GET` health, wire security + users; **validated** request bodies only. |
-| `auth-create-user` (console script → `auth_service.cli`) | New | Operator CLI: create JSON user file (`username`, `password_hash`, `created_at`) under `AUTH_USERS_DIR`. |
+| `auth-create-user` (console script → `auth_service.cli`) | New | Operator CLI: create JSON user file (`username`, `password_hash`, `created_at`, `role`; `--role` default `analyst`) under `AUTH_USERS_DIR`. |
 | `services/auth-service/tests/conftest.py` | New | Temp `AUTH_USERS_DIR`, test `JWT_SIGNING_SECRET`, `TestClient` app fixture. |
 | `services/auth-service/tests/test_security.py` | New | Unit tests: hash verify, JWT claims/exp, HS256 signature check. |
 | `services/auth-service/tests/test_api.py` | New | API tests: login success/failure, malformed body, health. |
@@ -89,7 +93,7 @@ Base URL is the deployed origin of `services/auth-service` (e.g. `http://localho
 
 | Method | Path | Overview |
 |--------|------|----------|
-| `POST` | `/auth/login` | Accepts JSON `{ "email", "password" }` (**sanitized/validated** per Step 2). Resolves user file by **fast hash of normalized email** (filename); validates password; on success returns **HS256** JWT (`access_token`, `token_type: bearer`). On failure returns `401` without distinguishing missing user vs wrong password. |
+| `POST` | `/auth/login` | Accepts JSON `{ "email", "password" }` (**sanitized/validated** per Step 2). Resolves user file by **fast hash of normalized email** (filename); validates password; on success returns **HS256** JWT (`access_token`, `token_type: bearer`) whose payload includes **`role`**. On failure returns `401` without distinguishing missing user vs wrong password. |
 | `GET` | `/health` | Lightweight **liveness** check for orchestration and load balancers (e.g. `200` with a small JSON body such as `{ "status": "ok" }`). No authentication required. |
 
 **Not in scope for this milestone:** registration, refresh tokens, logout/revocation, password reset, JWKS, or introspection endpoints.
@@ -111,9 +115,10 @@ Base URL is the deployed origin of `services/auth-service` (e.g. `http://localho
    - **`username`** — string, normalized email-shaped identifier (same string used for filename hash input).
    - **`password_hash`** — string, **salted** password hash only (e.g. Argon2id or bcrypt full digest—no plaintext passwords).
    - **`created_at`** — creation **date/time** (ISO 8601 string in UTC recommended, e.g. `2026-04-04T12:00:00Z`).
+   - **`role`** — string, either **`admin`** or **`analyst`** (required; no default for missing key—invalid files must not authenticate).
    *(The filename hash is only for stable, cross-OS safe paths—not confidentiality.)*
 4. **Hashing:** On password verification, use constant-time comparison provided by the hashing library. On user creation (CLI or admin script), hash the password and write the file to the path derived from the same **filename** hash function as login.
-5. **JWT:** On successful login, issue a JWT signed with **HS256** using `JWT_SIGNING_SECRET`, with claims including `sub` = normalized email, `exp` aligned with `JWT_EXPIRES_DAYS`, `iat`, and optional `iss`/`aud` if useful for future validation. Document `alg: HS256` and env vars in README.
+5. **JWT:** On successful login, issue a JWT signed with **HS256** using `JWT_SIGNING_SECRET`, with claims including `sub` = normalized email, `exp` aligned with `JWT_EXPIRES_DAYS`, `iat`, **`role`** = user’s role, and optional `iss`/`aud` if useful for future validation. Document `alg: HS256` and env vars in README.
 
 ### 2. Auth HTTP API
 
@@ -123,7 +128,7 @@ Base URL is the deployed origin of `services/auth-service` (e.g. `http://localho
    - **Email/username identifier:** After strip/lowercase, validate **email-shaped** pattern (same rules as product); reject empty or over-long values before filesystem use.
    - **Password (plaintext at verify time):** Treat as opaque UTF-8 bytes/string with max length only—no HTML/log echo of raw password.
    - **Filesystem:** Build paths **only** as `join(AUTH_USERS_DIR, f"{hex_digest}.json")` using **your own** hex digest from the normalized username—never concatenate raw user input into paths.
-   - **User JSON loaded from disk:** After `json.load`, validate types (`username`/`password_hash`/`created_at` are strings of bounded length); **`password_hash`** must match expected hash string charset (e.g. bcrypt/argon prefix); parse **`created_at`** strictly (ISO 8601) or reject file; reject extra keys only if you choose strict schema—document choice.
+   - **User JSON loaded from disk:** After `json.load`, validate types (`username`/`password_hash`/`created_at`/`role` per schema); **`password_hash`** must match expected hash string charset (e.g. bcrypt/argon prefix); parse **`created_at`** strictly (ISO 8601) or reject file; **`role`** must be `admin` or `analyst`; reject extra keys only if you choose strict schema—document choice.
    - **CLI (`auth-create-user`):** Apply the **same** normalization and length rules as login for username; read passwords safely (no argv logging); optional stdin with confirm for production scripts.
 3. Responses: `200` with `{ "access_token": "<jwt>", "token_type": "bearer" }` (or similar); `401` for bad credentials; `422` for malformed body; `500` only for unexpected errors (no stack traces in responses).
 4. **CORS:** If orchestration-web calls this service directly from the browser, enable CORS for known origins (mirror orchestration-server’s pattern from `backend/config.py` / env) or document that the browser must use a same-origin proxy instead.
@@ -131,7 +136,7 @@ Base URL is the deployed origin of `services/auth-service` (e.g. `http://localho
 
 ### 3. User bootstrap (operator workflow)
 
-1. Ship a **CLI** (e.g. `auth-create-user` → `auth_service.cli`) to create a user file: inputs email + password (stdin or args), normalize username, derive filename via the **same fast hash** as runtime, compute salted `password_hash`, set `created_at` to now, write `{digest}.json` with **`username`**, **`password_hash`**, **`created_at`**. Alternatively document manual JSON creation with a helper command—prefer script to avoid mistakes.
+1. Ship a **CLI** (e.g. `auth-create-user` → `auth_service.cli`) to create a user file: inputs email + password (stdin or args), normalize username, derive filename via the **same fast hash** as runtime, compute salted `password_hash`, set `created_at` to now, set **`role`** (default **`analyst`**, e.g. `--role admin`), write `{digest}.json` with **`username`**, **`password_hash`**, **`created_at`**, **`role`**. Alternatively document manual JSON creation with a helper command—prefer script to avoid mistakes.
 2. Document in service README: **never** commit real user files; `.gitignore` the users directory.
 
 ### 4. Orchestration-server (explicit non-changes)
@@ -176,7 +181,7 @@ After login, layout guard, and any other **orchestration-web** UI or global styl
 
 ### 9. Tests and docs
 
-1. **Auth service unit tests:** Password hash/verify round-trip, wrong password, missing user file, **deterministic filename from username** (same input → same path), **valid/invalid user JSON** (required `username`, `password_hash`, `created_at`), JWT claims/exp, and signature verification with **HS256** + same secret.
+1. **Auth service unit tests:** Password hash/verify round-trip, wrong password, missing user file, **deterministic filename from username** (same input → same path), **valid/invalid user JSON** (required `username`, `password_hash`, `created_at`, `role`), JWT claims/exp (including **`role`**), and signature verification with **HS256** + same secret.
 2. **Auth service API tests:** Login success/failure via `TestClient`; **oversized/malformed bodies**; NUL in strings; invalid JSON; path-safe behavior (no escape from `AUTH_USERS_DIR`).
 3. **Web:** Smoke test login adapter with mocked `fetch` if no E2E harness; optional unit/integration check that **`api.ts` adds `Authorization`** when a token is set (mock token module).
 4. **Root-level ops note:** In auth service README, describe how a reverse proxy would sit in front of orchestration-web and orchestration-server in production; auth service URL exposed only where needed.
@@ -195,7 +200,7 @@ After login, layout guard, and any other **orchestration-web** UI or global styl
 - **Secrets:** No secrets or real user files committed; `.gitignore` user data dirs; example env in `.env.example` only with placeholders.
 - **JWT:** Issue and verify (in tests or docs) with **HS256** only; reject unexpected `alg` if adding verification later.
 - **Password storage:** JSON `password_hash` field only—salted hashes (Argon2id/bcrypt), not custom crypto; never store plaintext passwords.
-- **User JSON schema:** Every user file includes **`username`**, **`password_hash`**, **`created_at`**; reject or migrate records missing required keys.
+- **User JSON schema:** Every user file includes **`username`**, **`password_hash`**, **`created_at`**, **`role`** (`admin` \| `analyst`); reject records missing required keys (no silent default for missing **`role`**).
 - **User file paths:** Filename = fast hash (e.g. SHA-256 hex) of normalized email; algorithm fixed and documented; normalize email before hashing so lookups are stable. Cryptographic collision resistance of SHA-256 is sufficient for accidental collision avoidance; this is **not** a substitute for password hashing.
 - **Input sanitization:** All auth service entry points apply Step 2 rules; no raw client or file data trusted without validation; document limits in README.
 - **Orchestration-server boundary:** No auth logic added there for this feature; orchestration-web still **sends** `Authorization: Bearer` per **Step 8**—document that the server **ignores** it until a later milestone.

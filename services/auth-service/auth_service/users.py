@@ -32,7 +32,7 @@ def load_user_record(path: Path) -> UserRecord | None:
 
 def write_user_record(path: Path, record: UserRecord) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
-    payload = record.model_dump()
+    payload = record.model_dump(mode="json")
     path.write_text(
         json.dumps(payload, indent=2, sort_keys=True) + "\n",
         encoding="utf-8",

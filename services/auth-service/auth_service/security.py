@@ -8,6 +8,7 @@ import bcrypt
 import jwt
 
 from auth_service.config import Settings
+from auth_service.validation import UserRole
 
 
 def apply_pepper(password: str, pepper: str | None) -> bytes:
@@ -31,13 +32,14 @@ def verify_password(plain: str, password_hash: str, pepper: str | None) -> bool:
     return bcrypt.checkpw(data, stored)
 
 
-def create_access_token(subject_username: str, settings: Settings) -> str:
+def create_access_token(subject_username: str, role: UserRole, settings: Settings) -> str:
     now = datetime.now(timezone.utc)
     exp = now + timedelta(days=settings.jwt_expires_days)
     payload = {
         "sub": subject_username,
         "iat": int(now.timestamp()),
         "exp": int(exp.timestamp()),
+        "role": role.value,
     }
     return jwt.encode(
         payload,
