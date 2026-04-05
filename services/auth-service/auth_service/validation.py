@@ -30,6 +30,26 @@ def _reject_controls(value: str, field: str) -> str:
     return value
 
 
+class UsernameBody(BaseModel):
+    """Single email-shaped identifier for HTTP admin routes (field name `username`, not `email`)."""
+
+    model_config = ConfigDict(str_strip_whitespace=True)
+
+    username: EmailStr
+
+    @field_validator("username", mode="before")
+    @classmethod
+    def username_strip(cls, v: object) -> object:
+        if isinstance(v, str):
+            return v.strip()
+        return v
+
+    @field_validator("username")
+    @classmethod
+    def username_controls(cls, v: str) -> str:
+        return _reject_controls(v, "username")
+
+
 class LoginBody(BaseModel):
     model_config = ConfigDict(str_strip_whitespace=True)
 

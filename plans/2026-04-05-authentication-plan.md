@@ -4,6 +4,12 @@
 
 - **Roles:** Each user has a required **`role`** persisted in the on-disk JSON (`admin` or `analyst`). On successful login, the **HS256** JWT includes the same value as the private claim **`role`** (alongside `sub`, `iat`, `exp`). The `auth-create-user` CLI accepts **`--role`** with default **`analyst`**. User files **must** include **`role`**; there is no migration shim for records without it—treat the store as authoritative; invalid or incomplete records fail validation at load and login does not succeed.
 
+## Amendment (2026-04-06)
+
+- **HTTP create user:** `POST /auth/users` with body `{ "username" }` (email-shaped). Creates a user with **`role`** **`analyst`**, random **8** alphanumeric password, **`201`** response with `{ "username", "password" }`. Gated by **`AUTH_HTTP_CREATE_USER_ENABLED`** (default **`false`**); when disabled returns **403** (not 404). Duplicate username → **409**.
+- **HTTP reset password:** `POST /auth/users/reset-password` with body `{ "username" }` and **`Authorization: Bearer <JWT>`**. The auth service **verifies** HS256 JWTs for this route (requires `exp`, `sub`, `role`). **Authorization:** `sub` (normalized) must equal **username** in the body, **or** JWT **`role`** is **`admin`**. Otherwise **403**. Unknown user → **404**; invalid/expired token → **401**. Response **200** with new random password. Diagram: [services/auth-service/docs/http-admin-flows.md](../services/auth-service/docs/http-admin-flows.md).
+- **Orchestration-server** remains unchanged: it still does not validate JWTs on orchestrator routes; only the **auth service** implements verification for these admin endpoints.
+
 ## Goal
 
 Deliver end-to-end **sign-in for Analysts** using a dedicated **HTTP authentication service** that validates email-form usernames and passwords against **hashed credentials on disk**, returns **JWTs** with configurable lifetime, and wire **orchestration-web** so users without a valid token are sent to a **login** flow. **Orchestration-server** remains unchanged: it does not verify auth; any caller is assumed to have been authenticated by an **inbound plane** (reverse proxy, API gateway, mesh, etc.)—that deployment concern stays out of scope for this milestone.
@@ -23,7 +29,7 @@ Deliver end-to-end **sign-in for Analysts** using a dedicated **HTTP authenticat
 
 - Add authentication middleware or JWT validation inside **orchestration-server** (explicitly excluded).
 - Replace or implement the **inbound plane** (TLS termination, OAuth at edge, mTLS, etc.).
-- Full account lifecycle (registration UI, password reset email, MFA, SSO)—only what’s needed for login + token issuance unless listed in Steps.
+- Full account lifecycle (registration UI, **email** password reset, MFA, SSO)—only what’s needed for login + token issuance unless listed in Steps. **Exception:** auth-service **HTTP** user creation and password reset (see Amendment 2026-04-06) are in scope for the auth API only; not wired in orchestration-web unless separately specified.
 
 ---
 
@@ -94,9 +100,11 @@ Base URL is the deployed origin of `services/auth-service` (e.g. `http://localho
 | Method | Path | Overview |
 |--------|------|----------|
 | `POST` | `/auth/login` | Accepts JSON `{ "email", "password" }` (**sanitized/validated** per Step 2). Resolves user file by **fast hash of normalized email** (filename); validates password; on success returns **HS256** JWT (`access_token`, `token_type: bearer`) whose payload includes **`role`**. On failure returns `401` without distinguishing missing user vs wrong password. |
+| `POST` | `/auth/users` | Body `{ "username" }`. If **`AUTH_HTTP_CREATE_USER_ENABLED`** is not `true`, **403**. Else creates user (`role` **analyst**, random password) → **201** `{ "username", "password" }` or **409** if exists. |
+| `POST` | `/auth/users/reset-password` | Header `Authorization: Bearer <jwt>`; body `{ "username" }`. Verifies JWT; allows reset only if **`sub`** matches **username** or **`role`** is **admin**; **200** + new password, else **401** / **403** / **404**. |
 | `GET` | `/health` | Lightweight **liveness** check for orchestration and load balancers (e.g. `200` with a small JSON body such as `{ "status": "ok" }`). No authentication required. |
 
-**Not in scope for this milestone:** registration, refresh tokens, logout/revocation, password reset, JWKS, or introspection endpoints.
+**Not in scope for this milestone (unless amended):** public self-service **registration UI**, refresh tokens, logout/revocation, **email**-based password reset, JWKS, or introspection endpoints. Auth-service **HTTP** create/reset (Amendment 2026-04-06) are **in scope** for the auth API.
 
 ---
 
@@ -198,7 +206,7 @@ After login, layout guard, and any other **orchestration-web** UI or global styl
 ## Guardrails
 
 - **Secrets:** No secrets or real user files committed; `.gitignore` user data dirs; example env in `.env.example` only with placeholders.
-- **JWT:** Issue and verify (in tests or docs) with **HS256** only; reject unexpected `alg` if adding verification later.
+- **JWT:** Issue and verify (in tests or docs) with **HS256** only; **`POST /auth/users/reset-password`** decodes and verifies JWTs with required claims; reject unexpected `alg` if adding broader verification later.
 - **Password storage:** JSON `password_hash` field only—salted hashes (Argon2id/bcrypt), not custom crypto; never store plaintext passwords.
 - **User JSON schema:** Every user file includes **`username`**, **`password_hash`**, **`created_at`**, **`role`** (`admin` \| `analyst`); reject records missing required keys (no silent default for missing **`role`**).
 - **User file paths:** Filename = fast hash (e.g. SHA-256 hex) of normalized email; algorithm fixed and documented; normalize email before hashing so lookups are stable. Cryptographic collision resistance of SHA-256 is sufficient for accidental collision avoidance; this is **not** a substitute for password hashing.
@@ -214,5 +222,5 @@ After login, layout guard, and any other **orchestration-web** UI or global styl
 
 - httpOnly cookie-based sessions and CSRF strategy for browser-only deployments.
 - Asymmetric signing (e.g. RS256) and JWKS if multiple services must verify tokens without sharing a symmetric secret.
-- Server-side session revocation list and password reset flows.
+- Server-side session revocation list and **email**-driven password reset flows (distinct from auth-service HTTP reset in Amendment 2026-04-06).
 - Orchestration-server **JWT validation** when product requires defense in depth (client already sends Bearer per **Step 8**).

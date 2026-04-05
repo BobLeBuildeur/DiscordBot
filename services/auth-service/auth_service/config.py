@@ -29,6 +29,10 @@ class Settings(BaseSettings):
     jwt_expires_days: float = Field(default=30.0, ge=0.01, validation_alias="JWT_EXPIRES_DAYS")
     auth_password_pepper: str | None = Field(default=None, validation_alias="AUTH_PASSWORD_PEPPER")
     cors_origins: str = Field(default="*", validation_alias="AUTH_CORS_ORIGINS")
+    auth_http_create_user_enabled: bool = Field(
+        default=False,
+        validation_alias="AUTH_HTTP_CREATE_USER_ENABLED",
+    )
 
 
 @lru_cache

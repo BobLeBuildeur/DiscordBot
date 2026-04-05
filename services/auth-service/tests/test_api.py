@@ -106,3 +106,124 @@ def test_login_oversized_email_422(client, auth_env):
     huge = "a" * 300 + "@x.com"
     r = client.post("/auth/login", json={"email": huge, "password": "abcd1234"})
     assert r.status_code == 422
+
+
+def _auth_header(token: str) -> dict[str, str]:
+    return {"Authorization": f"Bearer {token}"}
+
+
+def test_create_user_http_disabled_403(client):
+    r = client.post("/auth/users", json={"username": "new@example.com"})
+    assert r.status_code == 403
+
+
+def test_create_user_http_enabled_201_and_login(auth_env, monkeypatch):
+    monkeypatch.setenv("AUTH_HTTP_CREATE_USER_ENABLED", "true")
+    get_settings.cache_clear()
+    client = TestClient(create_app(get_settings()))
+    try:
+        r = client.post("/auth/users", json={"username": "new@example.com"})
+        assert r.status_code == 201
+        data = r.json()
+        assert data["username"] == "new@example.com"
+        assert len(data["password"]) == 8
+        assert all(c.isalnum() for c in data["password"])
+        login = client.post(
+            "/auth/login",
+            json={"email": "new@example.com", "password": data["password"]},
+        )
+        assert login.status_code == 200
+    finally:
+        get_settings.cache_clear()
+
+
+def test_create_user_http_duplicate_409(auth_env, monkeypatch):
+    monkeypatch.setenv("AUTH_HTTP_CREATE_USER_ENABLED", "true")
+    get_settings.cache_clear()
+    client = TestClient(create_app(get_settings()))
+    try:
+        assert client.post("/auth/users", json={"username": "dup@example.com"}).status_code == 201
+        r = client.post("/auth/users", json={"username": "dup@example.com"})
+        assert r.status_code == 409
+    finally:
+        get_settings.cache_clear()
+
+
+def test_reset_password_missing_authorization_401(client, auth_env):
+    _write_user(auth_env["users_dir"], "u@example.com", "abcd1234")
+    r = client.post("/auth/users/reset-password", json={"username": "u@example.com"})
+    assert r.status_code == 401
+
+
+def test_reset_password_invalid_token_401(client, auth_env):
+    _write_user(auth_env["users_dir"], "u@example.com", "abcd1234")
+    r = client.post(
+        "/auth/users/reset-password",
+        json={"username": "u@example.com"},
+        headers={"Authorization": "Bearer not-a-jwt"},
+    )
+    assert r.status_code == 401
+
+
+def test_reset_password_analyst_cannot_reset_other_403(client, auth_env):
+    _write_user(auth_env["users_dir"], "a@example.com", "abcd1234", role=UserRole.analyst)
+    _write_user(auth_env["users_dir"], "b@example.com", "abcd1234", role=UserRole.analyst)
+    token = client.post(
+        "/auth/login", json={"email": "a@example.com", "password": "abcd1234"}
+    ).json()["access_token"]
+    r = client.post(
+        "/auth/users/reset-password",
+        json={"username": "b@example.com"},
+        headers=_auth_header(token),
+    )
+    assert r.status_code == 403
+
+
+def test_reset_password_self_200(client, auth_env):
+    _write_user(auth_env["users_dir"], "u@example.com", "abcd1234")
+    token = client.post(
+        "/auth/login", json={"email": "u@example.com", "password": "abcd1234"}
+    ).json()["access_token"]
+    r = client.post(
+        "/auth/users/reset-password",
+        json={"username": "u@example.com"},
+        headers=_auth_header(token),
+    )
+    assert r.status_code == 200
+    new_pw = r.json()["password"]
+    login = client.post("/auth/login", json={"email": "u@example.com", "password": new_pw})
+    assert login.status_code == 200
+
+
+def test_reset_password_admin_resets_other_200(client, auth_env):
+    _write_user(auth_env["users_dir"], "admin@example.com", "adminpass1", role=UserRole.admin)
+    _write_user(auth_env["users_dir"], "victim@example.com", "victimpass1", role=UserRole.analyst)
+    token = client.post(
+        "/auth/login",
+        json={"email": "admin@example.com", "password": "adminpass1"},
+    ).json()["access_token"]
+    r = client.post(
+        "/auth/users/reset-password",
+        json={"username": "victim@example.com"},
+        headers=_auth_header(token),
+    )
+    assert r.status_code == 200
+    new_pw = r.json()["password"]
+    login = client.post(
+        "/auth/login", json={"email": "victim@example.com", "password": new_pw}
+    )
+    assert login.status_code == 200
+
+
+def test_reset_password_unknown_user_404(client, auth_env):
+    _write_user(auth_env["users_dir"], "admin@example.com", "adminpass1", role=UserRole.admin)
+    token = client.post(
+        "/auth/login",
+        json={"email": "admin@example.com", "password": "adminpass1"},
+    ).json()["access_token"]
+    r = client.post(
+        "/auth/users/reset-password",
+        json={"username": "nobody@example.com"},
+        headers=_auth_header(token),
+    )
+    assert r.status_code == 404
