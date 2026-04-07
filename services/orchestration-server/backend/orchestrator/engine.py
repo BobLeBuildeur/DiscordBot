@@ -5,6 +5,11 @@ from dataclasses import dataclass
 from typing import Iterable
 
 from backend.config import Settings
+from backend.integrations.llm_analytics import (
+    begin_orchestrator_turn,
+    emit_product_event,
+    end_orchestrator_turn,
+)
 from backend.integrations.openai_client import LLMClient
 from backend.orchestrator.models import (
     GeneratedResponse,
@@ -140,6 +145,19 @@ class OrchestratorEngine:
         latest_user_message: str,
         inline_feedback: list[PlanInlineFeedbackItem] | None = None,
     ) -> Iterator[tuple[str, dict[str, object]]]:
+        # PostHog: one trace per turn; threading.local survives Starlette's threaded SSE iteration.
+        begin_orchestrator_turn(session.session_id)
+        try:
+            yield from self._stream_turn_inner(session, latest_user_message, inline_feedback)
+        finally:
+            end_orchestrator_turn()
+
+    def _stream_turn_inner(
+        self,
+        session: SessionState,
+        latest_user_message: str,
+        inline_feedback: list[PlanInlineFeedbackItem] | None = None,
+    ) -> Iterator[tuple[str, dict[str, object]]]:
         yield ("session", {"session_id": session.session_id})
         feedback = inline_feedback or []
 
@@ -234,6 +252,14 @@ class OrchestratorEngine:
             state_check=state_check,
             response=response,
             chunk_size=self.settings.stream_chunk_size,
+        )
+        emit_product_event(
+            "orchestration_turn_completed",
+            {
+                "session_id": session.session_id,
+                "assistant_kind": assistant_turn.kind,
+                "state_next_action": state_check.next_action.value,
+            },
         )
         yield ("final", result.final_event_payload())
 

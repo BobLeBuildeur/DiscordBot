@@ -69,7 +69,9 @@ def generate_book(llm: BooksLLMClient, settings: Settings, book_type: BookType, 
         '"tags": ["<keyword>", "..."], '
         '"body_markdown": "<markdown body>"}'
     )
-    data = llm.complete_json_system_user(system=system, user=user)
+    data = llm.complete_json_system_user(
+        system=system, user=user, analytics_span_name="books_generate_book"
+    )
     title_phrase = sanitize_text(str(data.get("title_phrase", ""))).strip()
     summary = sanitize_text(str(data.get("summary", ""))).strip()
     body = sanitize_text(str(data.get("body_markdown", "")))
@@ -110,7 +112,9 @@ def revise_book(
             '"body_markdown": "<full revised body>"}',
         ]
     )
-    data = llm.complete_json_system_user(system=system, user=user)
+    data = llm.complete_json_system_user(
+        system=system, user=user, analytics_span_name="books_revise_book"
+    )
     summary = sanitize_text(str(data.get("summary", ""))).strip()
     new_body = sanitize_text(str(data.get("body_markdown", "")))
     tags = _normalize_tags_from_llm(data)
