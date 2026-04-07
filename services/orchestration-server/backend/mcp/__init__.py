@@ -1,1 +1,1 @@
-"""MCP registry discovery and books enrichment for orchestration."""
+"""MCP registry discovery and STDIO transport helpers for orchestration."""

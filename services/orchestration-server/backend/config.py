@@ -1,7 +1,7 @@
 from functools import lru_cache
 from pathlib import Path
 
-from pydantic import Field
+from pydantic import AliasChoices, Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 SERVICE_ROOT = Path(__file__).resolve().parent.parent
@@ -28,11 +28,14 @@ class Settings(BaseSettings):
         default=SERVICE_ROOT / "config" / "mcp-registry.json",
         validation_alias="MCP_REGISTRY_PATH",
     )
-    orch_books_enrichment_max: int = Field(
+    orch_books_knowledge_max: int = Field(
         default=5,
         ge=0,
         le=50,
-        validation_alias="ORCH_BOOKS_ENRICHMENT_MAX",
+        validation_alias=AliasChoices(
+            "ORCH_BOOKS_KNOWLEDGE_MAX",
+            "ORCH_BOOKS_ENRICHMENT_MAX",
+        ),
     )
 
 

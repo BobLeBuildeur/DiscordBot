@@ -22,9 +22,13 @@ class McpRegistryRuntime:
     def get(self, server_id: str) -> DiscoveredMcpServer | None:
         return self._servers.get(server_id)
 
-    def books_enrichment_available(self) -> bool:
-        b = self._servers.get("books")
-        return b is not None and b.available
+    def server_offers_tools(self, server_id: str, *required_tools: str) -> bool:
+        """True if discovery succeeded and every named tool is advertised by that server."""
+        b = self._servers.get(server_id)
+        if b is None or not b.available:
+            return False
+        names = set(b.tool_names)
+        return all(t in names for t in required_tools)
 
 
 async def discover_registry(settings: Settings) -> McpRegistryRuntime:

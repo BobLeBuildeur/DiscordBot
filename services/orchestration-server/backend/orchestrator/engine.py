@@ -52,14 +52,15 @@ class OrchestratorEngine:
         store: FileBackedSessionStore,
         prompt_manager: PromptManager,
         llm_client: LLMClient,
-        session_enrichment: Callable[[SessionState], None] | None = None,
+        pre_generation_hook: Callable[[SessionState], None] | None = None,
     ) -> None:
         self.settings = settings
         self.store = store
         self.prompt_manager = prompt_manager
         self.llm_client = llm_client
-        # Runs after the initial user turn is persisted on new sessions, before state check.
-        self._session_enrichment = session_enrichment
+        # Optional sync hook after the first user turn is saved on new sessions, before state check.
+        # Same contract can be reused for other tool-backed prep steps (not MCP-specific).
+        self._pre_generation_hook = pre_generation_hook
 
     def start_session(self, problem_statement: str) -> OrchestrationResult:
         session_id: str | None = None
@@ -87,8 +88,8 @@ class OrchestratorEngine:
             {"turn": initial_turn.model_dump(mode="json")},
         )
         self.store.save_session(session)
-        if self._session_enrichment is not None:
-            self._session_enrichment(session)
+        if self._pre_generation_hook is not None:
+            self._pre_generation_hook(session)
             self.store.save_session(session)
         yield from self._stream_turn(session, problem_statement)
 

@@ -1,6 +1,6 @@
 # Orchestration server — architecture overview
 
-This document summarizes how `services/orchestration-server/` is structured: HTTP API, orchestration engine, file-backed sessions, prompts, OpenAI integration, and optional MCP-based knowledge enrichment.
+This document summarizes how `services/orchestration-server/` is structured: HTTP API, orchestration engine, file-backed sessions, prompts, OpenAI integration, and optional MCP-backed **books knowledge** on new sessions (orchestrator-owned; MCP layer is transport + discovery only).
 
 ## Component diagram
 
@@ -19,6 +19,7 @@ flowchart TB
         OE[OrchestratorEngine]
         PM[PromptManager]
         FS[FileBackedSessionStore]
+        BK[BooksKnowledgeForNewSession]
     end
 
     subgraph Integrations["Integrations"]
@@ -28,7 +29,6 @@ flowchart TB
 
     subgraph MCP["MCP (optional)"]
         MR[McpRegistryRuntime]
-        KE[KnowledgeEnrichmentService]
         REG["config/mcp-registry.json"]
         BMCP["books-mcp (STDIO)"]
     end
@@ -44,9 +44,9 @@ flowchart TB
     OE --> FS
     OE --> OAI
     OAI --> OAIAPI
-    OE -.-> KE
-    KE --> MR
-    KE --> BMCP
+    OE -.-> BK
+    BK --> MR
+    BK --> BMCP
     MR --> REG
     MR -.-> BMCP
     PM --> PROMPTS
@@ -55,7 +55,7 @@ flowchart TB
 
 ## Startup (lifespan)
 
-On startup, unless a test injects a pre-built `OrchestratorEngine`, the app loads the MCP registry, discovers each enabled server (stdio handshake, tool/resource lists), then constructs `KnowledgeEnrichmentService` and wires it into `OrchestratorEngine` as `session_enrichment`.
+On startup, unless a test injects a pre-built `OrchestratorEngine`, the app loads the MCP registry, discovers each enabled server (stdio handshake, tool/resource lists), then constructs `BooksKnowledgeForNewSession` and wires it into `OrchestratorEngine` as `pre_generation_hook` (runs after the first user turn is saved, before the state-check LLM call).
 
 ```mermaid
 sequenceDiagram
@@ -63,36 +63,36 @@ sequenceDiagram
     participant Reg as mcp-registry.json
     participant Disc as discover_registry
     participant RT as McpRegistryRuntime
-    participant KE as KnowledgeEnrichmentService
+    participant BK as BooksKnowledgeForNewSession
     participant Eng as OrchestratorEngine
 
     App->>Reg: read paths / cwd
     App->>Disc: discover MCP servers
     Disc->>Disc: stdio + initialize + list_tools / list_resources
     Disc-->>RT: cached discovery
-    App->>KE: new(store, runtime)
-    App->>Eng: new(..., session_enrichment=KE.run)
+    App->>BK: new(store, runtime)
+    App->>Eng: new(..., pre_generation_hook=BK)
 ```
 
-## New session flow (with enrichment)
+## New session flow (with books knowledge)
 
-For `POST /orchestrator/sessions`, the engine persists the initial user turn, may run enrichment (silent `knowledge` turn + step artifact), then runs state check and generation (follow-up, plan, or refinement) with prompts that include **organizational knowledge** when present.
+For `POST /orchestrator/sessions`, the engine persists the initial user turn, may run the books hook (silent `knowledge` turn + step artifact), then runs state check and generation (follow-up, plan, or refinement) with prompts that include **organizational knowledge** when present.
 
 ```mermaid
 sequenceDiagram
     participant API as POST /sessions
     participant Eng as OrchestratorEngine
     participant FS as FileBackedSessionStore
-    participant KE as KnowledgeEnrichmentService
+    participant BK as BooksKnowledgeForNewSession
     participant MCP as books-mcp
     participant OAI as OpenAI
 
     API->>Eng: start_session_streaming
     Eng->>FS: create_session + user-message step
-    Eng->>KE: run(session) [if MCP available]
-    KE->>MCP: find_books + get_book (stdio)
-    MCP-->>KE: book bodies
-    KE->>FS: append knowledge step + turn (kind=knowledge)
+    Eng->>BK: __call__(session) [if tools available]
+    BK->>MCP: find_books + get_book (stdio)
+    MCP-->>BK: book bodies
+    BK->>FS: append knowledge step + turn (kind=knowledge)
     Eng->>OAI: state check
     Eng->>OAI: stream generation (plan / follow-up / refine)
     Eng->>FS: assistant steps + session.json
@@ -115,6 +115,7 @@ sequenceDiagram
 | `backend/orchestrator/engine.py` | Session lifecycle and LLM turns |
 | `backend/orchestrator/prompts.py` | Builds prompts; organizational knowledge block |
 | `backend/orchestrator/store.py` | JSON + step artifacts under `data_root` |
+| `backend/orchestrator/tools/books_knowledge.py` | Books MCP call pattern + session updates for new sessions |
 | `backend/mcp/runtime.py` | Registry discovery |
-| `backend/mcp/enrichment.py` | Books MCP calls for new sessions |
+| `backend/mcp/stdio_client.py` | Shared MCP STDIO session helper (transport) |
 | `config/mcp-registry.json` | Committed MCP launch commands (e.g. `books-mcp`) |

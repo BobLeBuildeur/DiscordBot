@@ -6,7 +6,6 @@ from pydantic import BaseModel, Field
 class McpRegistryEntry(BaseModel):
     id: str
     enabled: bool = True
-    enrichment: bool = False
     command: list[str] = Field(min_length=1)
     cwd: str | None = None
     env: dict[str, str] = Field(default_factory=dict)

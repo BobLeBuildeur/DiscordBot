@@ -32,10 +32,56 @@ def _response(
     )
 
 
-def build_engine(test_settings, llm_client: FakeLLMClient) -> OrchestratorEngine:
+def build_engine(
+    test_settings,
+    llm_client: FakeLLMClient,
+    *,
+    pre_generation_hook=None,
+) -> OrchestratorEngine:
     store = FileBackedSessionStore(test_settings.data_root)
     prompt_manager = PromptManager(test_settings.prompt_root)
-    return OrchestratorEngine(test_settings, store, prompt_manager, llm_client)
+    return OrchestratorEngine(
+        test_settings,
+        store,
+        prompt_manager,
+        llm_client,
+        pre_generation_hook=pre_generation_hook,
+    )
+
+
+def test_pre_generation_hook_runs_after_first_user_turn_before_llm(test_settings):
+    """Same Callable[[SessionState], None] contract can back multiple tool strategies later."""
+    seen: list[str] = []
+
+    def hook(session):
+        seen.append(session.session_id)
+        assert session.conversation_history[-1].kind == "problem_statement"
+
+    llm_client = FakeLLMClient(
+        state_checks=[
+            StateCheck(
+                needs_more_information=True,
+                next_action=NextAction.ASK_FOLLOW_UP,
+                confidence=0.81,
+                confidence_threshold=test_settings.llm_confidence_threshold,
+                reason="Need details.",
+                missing_information=["x"],
+            )
+        ],
+        follow_up_responses=[
+            _response(
+                "Question?",
+                "Problem Understanding",
+                str(test_settings.prompt_root / "problem-understanding.md"),
+                0.81,
+            )
+        ],
+    )
+    engine = build_engine(test_settings, llm_client, pre_generation_hook=hook)
+    result = engine.start_session("Hello")
+    assert len(seen) == 1
+    assert seen[0] == result.session.session_id
+    assert llm_client.state_check_prompts
 
 
 def test_engine_asks_follow_up_when_confidence_is_below_threshold(test_settings):

@@ -8,11 +8,11 @@ from fastapi.middleware.cors import CORSMiddleware
 from backend.api.orchestrator import router as orchestrator_router
 from backend.config import Settings, get_settings
 from backend.integrations.openai_client import OpenAIOrchestratorClient
-from backend.mcp.enrichment import KnowledgeEnrichmentService
 from backend.mcp.runtime import discover_registry
 from backend.orchestrator.engine import OrchestratorEngine
 from backend.orchestrator.prompts import PromptManager
 from backend.orchestrator.store import FileBackedSessionStore
+from backend.orchestrator.tools.books_knowledge import BooksKnowledgeForNewSession
 
 
 def build_engine(settings: Settings) -> OrchestratorEngine:
@@ -36,13 +36,13 @@ def create_app(
         store = FileBackedSessionStore(resolved_settings.data_root)
         runtime = await discover_registry(resolved_settings)
         app.state.mcp_runtime = runtime
-        enrichment = KnowledgeEnrichmentService(resolved_settings, store, runtime)
+        books_knowledge = BooksKnowledgeForNewSession(resolved_settings, store, runtime)
         app.state.orchestrator_engine = OrchestratorEngine(
             resolved_settings,
             store,
             PromptManager(resolved_settings.prompt_root),
             OpenAIOrchestratorClient(resolved_settings),
-            session_enrichment=enrichment.run,
+            pre_generation_hook=books_knowledge,
         )
         yield
 
