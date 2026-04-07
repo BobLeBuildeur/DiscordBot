@@ -2,6 +2,7 @@
 	import { browser } from '$app/environment';
 	import { goto } from '$app/navigation';
 	import { createHttpAuthAdapter, setAccessToken, isAccessTokenValid } from '$lib/auth/index.js';
+	import { captureEvent } from '$lib/analytics/posthog.js';
 
 	const auth = createHttpAuthAdapter();
 
@@ -37,9 +38,14 @@
 			const result = await auth.login({ email: em, password });
 			if (!result.ok) {
 				error = result.error;
+				captureEvent('login_submitted', {
+					success: false,
+					error_code: 'auth_failed'
+				});
 				return;
 			}
 			setAccessToken(result.accessToken);
+			captureEvent('login_submitted', { success: true });
 			goto('/');
 		} finally {
 			submitting = false;

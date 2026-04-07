@@ -2,6 +2,8 @@
 	import { goto } from '$app/navigation';
 	import History from '$lib/components/History.svelte';
 	import MessageInput from '$lib/components/MessageInput.svelte';
+	import { captureEvent } from '$lib/analytics/posthog.js';
+	import { problemStatementFingerprint, redactClientErrorMessage } from '$lib/analytics/fingerprint.js';
 	import { startSession } from '$lib/api.js';
 	import type { Message } from '$lib/types.js';
 
@@ -54,6 +56,9 @@
 		streamingBody = '';
 		streamingAssistantKind = 'message';
 		isStreaming = true;
+		const streamStarted = performance.now();
+		const fp = await problemStatementFingerprint(text);
+		captureEvent('orchestration_session_started', fp);
 
 		try {
 			await startSession(text, {
@@ -71,6 +76,13 @@
 			});
 
 			isStreaming = false;
+			captureEvent('orchestration_sse_stream_completed', {
+				session_id: sessionId,
+				flow: 'start',
+				assistant_kind: streamingAssistantKind,
+				duration_ms: Math.round(performance.now() - streamStarted),
+				http_status: 200
+			});
 			const finalMessages: Message[] = [
 				createMessage('analyst', text),
 				createMessage(
@@ -89,6 +101,19 @@
 			}
 		} catch (err) {
 			isStreaming = false;
+			const msg = err instanceof Error ? err.message : 'Unknown error';
+			captureEvent('orchestration_client_error', {
+				session_id: sessionId || undefined,
+				operation: 'start_session',
+				error_message_redacted: redactClientErrorMessage(msg)
+			});
+			captureEvent('orchestration_sse_stream_completed', {
+				session_id: sessionId,
+				flow: 'start',
+				assistant_kind: streamingAssistantKind,
+				duration_ms: Math.round(performance.now() - streamStarted),
+				http_status: 0
+			});
 			console.error('Failed to start session:', err);
 			messages = [
 				...messages,

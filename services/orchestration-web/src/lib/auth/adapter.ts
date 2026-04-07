@@ -1,12 +1,14 @@
-import { PUBLIC_AUTH_API_URL } from '$env/static/public';
+import { env } from '$env/dynamic/public';
 import type { AuthAdapter, LoginCredentials, LoginResult } from './types.js';
 
-const BASE = PUBLIC_AUTH_API_URL ?? '';
+function authBase(): string {
+	return env.PUBLIC_AUTH_API_URL ?? '';
+}
 
 export function createHttpAuthAdapter(): AuthAdapter {
 	return {
 		async login(credentials: LoginCredentials): Promise<LoginResult> {
-			const r = await fetch(`${BASE}/auth/login`, {
+			const r = await fetch(`${authBase()}/auth/login`, {
 				method: 'POST',
 				headers: { 'Content-Type': 'application/json' },
 				body: JSON.stringify({

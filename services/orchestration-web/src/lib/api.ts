@@ -1,4 +1,4 @@
-import { PUBLIC_ORCHESTRATION_API_URL } from '$env/static/public';
+import { env } from '$env/dynamic/public';
 import { getAccessToken } from '$lib/auth/token.js';
 import type {
 	Message,
@@ -8,7 +8,9 @@ import type {
 	PlanInlineFeedback
 } from './types.js';
 
-const BASE = PUBLIC_ORCHESTRATION_API_URL ?? '';
+function orchestrationBase(): string {
+	return env.PUBLIC_ORCHESTRATION_API_URL ?? '';
+}
 
 function orchestrationAuthHeaders(): Record<string, string> {
 	const t = getAccessToken();
@@ -104,7 +106,11 @@ export async function startSession(
 	problemStatement: string,
 	callbacks: SSECallbacks
 ): Promise<void> {
-	await streamSSE(`${BASE}/orchestrator/sessions`, { problem_statement: problemStatement }, callbacks);
+	await streamSSE(
+		`${orchestrationBase()}/orchestrator/sessions`,
+		{ problem_statement: problemStatement },
+		callbacks
+	);
 }
 
 export async function sendMessage(
@@ -114,7 +120,7 @@ export async function sendMessage(
 	callbacks: SSECallbacks
 ): Promise<void> {
 	await streamSSE(
-		`${BASE}/orchestrator/sessions/${sessionId}/messages`,
+		`${orchestrationBase()}/orchestrator/sessions/${sessionId}/messages`,
 		{ message, plan_inline_feedback: planInlineFeedback },
 		callbacks
 	);
@@ -197,7 +203,7 @@ function conversationHistoryToMessages(
 }
 
 export async function getSession(sessionId: string): Promise<Message[]> {
-	const response = await fetch(`${BASE}/orchestrator/sessions/${sessionId}`, {
+	const response = await fetch(`${orchestrationBase()}/orchestrator/sessions/${sessionId}`, {
 		headers: { ...orchestrationAuthHeaders() }
 	});
 	if (!response.ok) {

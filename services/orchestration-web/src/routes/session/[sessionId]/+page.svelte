@@ -2,6 +2,8 @@
 	import { page } from '$app/state';
 	import History from '$lib/components/History.svelte';
 	import MessageInput from '$lib/components/MessageInput.svelte';
+	import { captureEvent } from '$lib/analytics/posthog.js';
+	import { redactClientErrorMessage } from '$lib/analytics/fingerprint.js';
 	import { getSession, sendMessage } from '$lib/api.js';
 	import type { Message } from '$lib/types.js';
 
@@ -34,6 +36,9 @@
 	let streamingAssistantKind = $state('message');
 	const streamingMessageId = 'streaming-agent';
 
+	// Debounce plan feedback analytics: rapid edits while composing should not flood PostHog.
+	let planFeedbackDebounce: ReturnType<typeof setTimeout> | null = null;
+
 	let displayMessages: Message[] = $derived(
 		isStreaming
 			? [
@@ -63,15 +68,28 @@
 			loading = true;
 			loadError = null;
 			messages = [];
+			const loadStarted = performance.now();
 			try {
 				const loaded = await getSession(id);
 				if (cancelled) return;
 				messages = loaded;
+				captureEvent('orchestration_session_loaded', {
+					session_id: id,
+					message_count: loaded.length,
+					load_duration_ms: Math.round(performance.now() - loadStarted),
+					error: false
+				});
 			} catch (err) {
 				if (cancelled) return;
 				messages = [];
 				loadError =
 					err instanceof Error ? err.message : 'Failed to load session';
+				captureEvent('orchestration_session_loaded', {
+					session_id: id,
+					message_count: 0,
+					load_duration_ms: Math.round(performance.now() - loadStarted),
+					error: true
+				});
 			} finally {
 				if (!cancelled) loading = false;
 			}
@@ -118,6 +136,13 @@
 		streamingBody = '';
 		streamingAssistantKind = 'message';
 		isStreaming = true;
+		const streamStarted = performance.now();
+		captureEvent('orchestration_message_sent', {
+			session_id: sessionId,
+			message_length: text.length,
+			has_plan_inline_feedback: inlineFeedback.length > 0,
+			inline_feedback_item_count: inlineFeedback.length
+		});
 
 		try {
 			await sendMessage(sessionId, text, inlineFeedback, {
@@ -131,6 +156,13 @@
 			});
 
 			isStreaming = false;
+			captureEvent('orchestration_sse_stream_completed', {
+				session_id: sessionId,
+				flow: 'continue',
+				assistant_kind: streamingAssistantKind,
+				duration_ms: Math.round(performance.now() - streamStarted),
+				http_status: 200
+			});
 			messages = [
 				...messages,
 				createMessage(
@@ -142,6 +174,19 @@
 			];
 		} catch (err) {
 			isStreaming = false;
+			const msg = err instanceof Error ? err.message : 'Unknown error';
+			captureEvent('orchestration_client_error', {
+				session_id: sessionId,
+				operation: 'send_message',
+				error_message_redacted: redactClientErrorMessage(msg)
+			});
+			captureEvent('orchestration_sse_stream_completed', {
+				session_id: sessionId,
+				flow: 'continue',
+				assistant_kind: streamingAssistantKind,
+				duration_ms: Math.round(performance.now() - streamStarted),
+				http_status: 0
+			});
 			console.error('Failed to send message:', err);
 			messages = [
 				...messages,
@@ -156,6 +201,14 @@
 		messages = messages.map((message) =>
 			message.id === messageId ? { ...message, inline_feedback: inlineFeedback } : message
 		);
+		const count = inlineFeedback.filter((item) => item.comment.trim().length > 0).length;
+		if (planFeedbackDebounce) clearTimeout(planFeedbackDebounce);
+		planFeedbackDebounce = setTimeout(() => {
+			captureEvent('plan_inline_feedback_changed', {
+				session_id: sessionId,
+				feedback_item_count: count
+			});
+		}, 800);
 	}
 </script>
 
